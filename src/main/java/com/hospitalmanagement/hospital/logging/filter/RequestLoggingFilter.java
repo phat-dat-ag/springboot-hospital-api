@@ -35,6 +35,7 @@ import java.util.UUID;
 import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.Map;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
@@ -217,6 +218,31 @@ public final class RequestLoggingFilter extends OncePerRequestFilter {
             state.errorCode = code;
     }
 
+    /**
+     * Call only with a schema-owned field path and server-defined enum values.
+     */
+    public static void recordValidationDetails(
+            HttpServletRequest request,
+            String field,
+            List<String> allowedValues
+    ) {
+        if (request.getAttribute(STATE) instanceof RequestState state
+                && field != null
+                && field.length() <= 128
+                && field.matches("[A-Za-z][A-Za-z0-9]*(?:\\[\\d{1,6}\\]|\\.[A-Za-z][A-Za-z0-9]*)*")
+                && allowedValues != null
+                && !allowedValues.isEmpty()
+                && allowedValues.size() <= 32
+                && allowedValues.stream().allMatch(value ->
+                value != null && value.matches("[A-Za-z][A-Za-z0-9_]{0,63}"))
+        ) {
+            state.validationDetails = new ValidationDetails(field, List.copyOf(allowedValues));
+        }
+    }
+
+    private record ValidationDetails(String field, List<String> allowedValues) {
+    }
+
     private static String singleHeader(HttpServletRequest request, String name) {
         var values = request.getHeaders(name);
 
@@ -252,6 +278,7 @@ public final class RequestLoggingFilter extends OncePerRequestFilter {
         private volatile String traceId;
         private volatile String spanId;
         private volatile String errorCode;
+        private volatile ValidationDetails validationDetails;
 
         private RequestState(
                 HttpServletRequest request,
@@ -365,6 +392,12 @@ public final class RequestLoggingFilter extends OncePerRequestFilter {
 
                 if (errorCode != null)
                     event.addKeyValue("errorCode", errorCode);
+
+                ValidationDetails validation = validationDetails;
+                if (validation != null) {
+                    event.addKeyValue("validation.field", validation.field())
+                            .addKeyValue("validation.allowed_values", validation.allowedValues());
+                }
 
                 if (failure != null)
                     event.addKeyValue("error.type", failure.getClass().getName())

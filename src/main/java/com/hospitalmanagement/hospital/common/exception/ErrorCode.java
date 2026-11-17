@@ -8,10 +8,31 @@ public enum ErrorCode {
 
     // Client errors
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "Invalid request"),
+    INVALID_ENUM_VALUE(HttpStatus.BAD_REQUEST, "Request contains an invalid enum value"),
     VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "Request validation failed"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "HTTP method not allowed"),
 
+    PATIENT_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "Medical record number is already registered"
+    ),
+    CONTACT_DETAILS_REQUIRED(
+            HttpStatus.BAD_REQUEST,
+            "Each contact requires a nonblank phone, email or address"
+    ),
+    CONTACT_NAME_REQUIRED(
+            HttpStatus.BAD_REQUEST,
+            "Emergency and guardian contacts require a contact name"
+    ),
+    DUPLICATE_PRIMARY_CONTACT(
+            HttpStatus.BAD_REQUEST,
+            "Only one primary contact is allowed per contact type"
+    ),
+    INVALID_ACTOR_ID(
+            HttpStatus.UNAUTHORIZED,
+            "Authenticated user identity is invalid"
+    ),
 
     // Server errors
     INTERNAL_SERVER_ERROR(

@@ -3,7 +3,10 @@
 This is the separate database design and relationship reference for the Hospital
 module's Clinical schema. The database is `clinical_db`, using PostgreSQL 17.6
 and the `public` schema. There are **28 business tables**, plus Flyway's own
-`flyway_schema_history` table. There are no clinical JPA entities or business APIs.
+`flyway_schema_history` table. Patient registration now maps the patient/contact/
+audit subset; see [the API 1 guide](API1-PATIENT-REGISTRATION.md). Other clinical
+features remain future work. Repository findings below describe the earlier
+database-first phase.
 
 ## Repository findings and deployment identity
 

@@ -1,9 +1,12 @@
 package com.hospitalmanagement.hospital.controller;
 
+import com.hospitalmanagement.hospital.patient.service.PatientService;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.security.core.authority.AuthorityUtils.createAuthorityList;
@@ -21,6 +24,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class HospitalFoundationTest {
+    @MockitoBean
+    private PatientService patients;
+
     @Autowired
     private MockMvc mvc;
 
@@ -41,14 +47,20 @@ class HospitalFoundationTest {
     }
 
     @Test
-    void obsoleteAndUnimplementedBusinessRoutesAreAbsent() throws Exception {
+    void obsoleteRoutesRemainAbsent() throws Exception {
         for (String path : new String[]{
                 "/api/v1/learning/me",
-                "/api/v1/integration/jwks",
-                "/api/v1/hospital/patients"
+                "/api/v1/integration/jwks"
         }) {
             mvc.perform(get(path).with(jwt().authorities(createAuthorityList("ROLE_USER"))))
                     .andExpect(status().isNotFound());
         }
+    }
+
+    @Test
+    void patientSearchIsNotImplementedAlongsideRegistration() throws Exception {
+        mvc.perform(get("/api/v1/hospital/patients")
+                        .with(jwt().authorities(createAuthorityList("ROLE_USER"))))
+                .andExpect(status().isMethodNotAllowed());
     }
 }
