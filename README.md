@@ -1,5 +1,8 @@
 # Hospital Management API
 
+For a guided next phase, follow the [three-API learning plan](docs/API-LEARNING-PLAN.md)
+for patient registration, patient search and encounter status changes.
+
 This module is an infrastructure foundation. It contains no clinical or billing
 entities, repositories, seed data, scheduled jobs, or business operations.
 
@@ -23,14 +26,21 @@ numeric role mapping. All other incoming routes require authentication.
 
 Set `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and
 `SPRING_DATASOURCE_PASSWORD`. Outside Compose, the JDBC URL is
-`jdbc:postgresql://localhost:5432/hospital_db`. Passwords have no defaults.
+`jdbc:postgresql://localhost:5432/clinical_db`. Passwords have no defaults.
 Hikari defaults to 2–10 connections and a 30-second acquisition timeout.
 
-Flyway's migration source is `src/main/resources/db/migration/`, deliberately
-empty. No fake migration or Hospital schema is provided. Compose's Flyway job
-mounts this source before startup. Spring Flyway validates/applies the packaged
-migrations for standalone runs. Hibernate uses `validate`, SQL initialization is
-disabled, and Flyway clean is disabled. Add reviewed migrations when entities exist.
+Flyway's single migration source is the root `db/migration/hospital/` directory.
+Maven copies it into `db/migration` in the jar, and Compose mounts it read-only
+in the Flyway runner. Build this Dockerfile from the repository root (Compose
+already does this). Hibernate uses `validate`, SQL initialization is disabled,
+and Flyway clean is disabled. There are no JPA entities yet, so validation does
+not compare mappings to these tables; Flyway and database tests verify them.
+
+The nine migrations create all 28 Clinical business tables without seed data.
+See [the complete database reference](docs/DATABASE.md) for every table,
+relationship, lifecycle, timestamp policy, migration and verification command.
+The module/application/package retain their intermediate Hospital names;
+Clinical module renaming is a separate phase. PostgreSQL is `clinical_db`.
 
 ## Protected authentication contracts
 
@@ -51,7 +61,8 @@ Use Java 17 or later. Run `mvn test` here or at the root for User and Hospital.
 Spring does not load `.env` automatically; inject settings through the IDE/shell.
 The normal suite uses local HTTP fixtures and excludes PostgreSQL from web startup
 tests. The opt-in database test requires `HOSPITAL_DATABASE_TESTS=true` and a real,
-configured PostgreSQL service. No test starts Docker.
+configured PostgreSQL service. No test starts Docker. The pure database suite is separately enabled with
+`CLINICAL_DATABASE_TESTS=true`; see the database reference for isolated credentials.
 
 Structured JSON logging, bounded spools, correlation, privacy filtering, private
 Prometheus metrics and W3C tracing remain enabled through existing configuration.

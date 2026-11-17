@@ -3,9 +3,11 @@ FROM eclipse-temurin:21-jdk-jammy AS build
 
 WORKDIR /workspace
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
-COPY src/ src/
+COPY springboot-hospital-api/.mvn/ .mvn/
+COPY springboot-hospital-api/mvnw springboot-hospital-api/pom.xml ./
+COPY springboot-hospital-api/src/ src/
+# Mirror the repository-relative resource directory used by Maven.
+COPY db/migration/hospital/ /db/migration/hospital/
 
 RUN sed -i 's/\r$//' mvnw && chmod +x mvnw && ./mvnw -B -ntp clean package -DskipTests
 
