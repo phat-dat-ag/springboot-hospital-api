@@ -22,9 +22,9 @@ class PostgresStartupTest {
     private Flyway flyway;
 
     @Test
-    void startsAgainstHospitalDatabaseAndValidatesMigrations() {
+    void startsAgainstClinicalDatabaseAndValidatesMigrations() {
         assertThat(jdbc.queryForObject("select current_database()", String.class))
-                .isEqualTo("hospital_db");
+                .isEqualTo("clinical_db");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
     }
 }
