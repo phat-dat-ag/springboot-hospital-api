@@ -6,7 +6,7 @@
             scope="context"
             name="SERVICE_NAME"
             source="spring.application.name"
-            defaultValue="learning-api"/>
+            defaultValue="hospital-api"/>
 
     <!-- Stable identity is shared with the Phase 1 request schema. -->
     <springProperty
@@ -21,12 +21,12 @@
             defaultValue="development"/>
 
     <property name="LOG_DIR" value="${APP_LOG_DIR:-./logs}"/>
-    <property name="APP_NAME" value="${APP_NAME:-learning-api}"/>
+    <property name="APP_NAME" value="${APP_NAME:-hospital-api}"/>
     <property name="LOG_LEVEL" value="${LOG_LEVEL:-INFO}"/>
 
     <!-- Console appender -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="com.japaneselearning.learning.logging.StructuredJsonEncoder">
+        <encoder class="com.hospitalmanagement.hospital.logging.StructuredJsonEncoder">
             <serviceName>${SERVICE_NAME}</serviceName>
             <serviceVersion>${SERVICE_VERSION}</serviceVersion>
             <environment>${DEPLOYMENT_ENVIRONMENT}</environment>
@@ -48,7 +48,7 @@
 
         </rollingPolicy>
 
-        <encoder class="com.japaneselearning.learning.logging.StructuredJsonEncoder">
+        <encoder class="com.hospitalmanagement.hospital.logging.StructuredJsonEncoder">
             <serviceName>${SERVICE_NAME}</serviceName>
             <serviceVersion>${SERVICE_VERSION}</serviceVersion>
             <environment>${DEPLOYMENT_ENVIRONMENT}</environment>

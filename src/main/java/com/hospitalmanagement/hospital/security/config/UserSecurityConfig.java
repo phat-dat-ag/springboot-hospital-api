@@ -1,0 +1,71 @@
+package com.hospitalmanagement.hospital.security.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import com.hospitalmanagement.hospital.security.jwt.user.JwtRoleConverter;
+import org.springframework.security.config.ObjectPostProcessor;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
+import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
+
+/**
+ * Authenticates incoming user tokens; outbound service signing is configured separately.
+ */
+@Configuration("securityConfig")
+public class UserSecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtRoleConverter roles) throws Exception {
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+
+        converter.setJwtGrantedAuthoritiesConverter(roles);
+
+        http.csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .oauth2ResourceServer(server -> server
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(converter))
+                        .withObjectPostProcessor(new ObjectPostProcessor<BearerTokenAuthenticationFilter>() {
+                                                     @Override
+                                                     public <O extends BearerTokenAuthenticationFilter> O postProcess(O filter) {
+                                                         var failureHandler = new AuthenticationEntryPointFailureHandler(
+                                                                 new BearerTokenAuthenticationEntryPoint()
+                                                         );
+
+                                                         // JWKS retrieval failures must also fail authentication with 401.
+                                                         failureHandler.setRethrowAuthenticationServiceException(false);
+                                                         filter.setAuthenticationFailureHandler(failureHandler);
+
+                                                         return filter;
+                                                     }
+                                                 }
+                        )
+                );
+
+        http.authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                        HttpMethod.GET,
+                        "/actuator/health",
+                        "/actuator/health/**"
+                ).permitAll()
+
+                .requestMatchers(
+                        HttpMethod.GET,
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                        "/v3/api-docs",
+                        "/v3/api-docs/**"
+                ).permitAll()
+
+                .requestMatchers(
+                        "/api/v1/hospital/**"
+                ).hasAnyRole("USER", "ADMIN")
+                .anyRequest().authenticated());
+        return http.build();
+    }
+}
