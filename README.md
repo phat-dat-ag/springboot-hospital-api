@@ -3,17 +3,21 @@
 For a guided next phase, follow the [three-API learning plan](docs/API-LEARNING-PLAN.md)
 for patient registration, patient search and encounter status changes.
 
-This module is an infrastructure foundation. It contains no clinical or billing
-entities, repositories, seed data, scheduled jobs, or business operations.
+This module includes the infrastructure foundation and patient registration
+with transactional contacts and audit metadata. See the
+[API 1 registration guide](docs/API1-PATIENT-REGISTRATION.md) for requests,
+validation, enum values and tests. Patient search and encounter workflows remain
+future work; no automatic demonstration data is supplied.
 
 Entry point: `com.hospitalmanagement.hospital.HospitalApiApplication`.
 Coordinates: `com.hospitalmanagement:hospital-api:0.0.1-SNAPSHOT`.
 
-| GET route | Purpose | Permission |
+| Route | Purpose | Permission |
 | --- | --- | --- |
 | `/api/v1/hospital/technical/authentication` | Confirm subject, roles and issuer without exposing tokens | USER or ADMIN |
 | `/api/v1/hospital/technical/users/{id}` | Exercise the existing internal User client | USER or ADMIN |
 | `/api/v1/hospital/technical/jwks` | Inspect User public keys via the existing client | USER or ADMIN |
+| `POST /api/v1/hospital/patients` | Register a patient and optional contacts | ADMIN |
 | `/actuator/health`, `/actuator/health/readiness` | Health and readiness | Public |
 | `/v3/api-docs`, `/swagger-ui/index.html` | OpenAPI | Public |
 
@@ -33,8 +37,8 @@ Flyway's single migration source is the root `db/migration/hospital/` directory.
 Maven copies it into `db/migration` in the jar, and Compose mounts it read-only
 in the Flyway runner. Build this Dockerfile from the repository root (Compose
 already does this). Hibernate uses `validate`, SQL initialization is disabled,
-and Flyway clean is disabled. There are no JPA entities yet, so validation does
-not compare mappings to these tables; Flyway and database tests verify them.
+and Flyway clean is disabled. Hibernate validates the mapped patient/contact/audit
+entities; Flyway and database tests cover the wider 28-table schema.
 
 The nine migrations create all 28 Clinical business tables without seed data.
 See [the complete database reference](docs/DATABASE.md) for every table,

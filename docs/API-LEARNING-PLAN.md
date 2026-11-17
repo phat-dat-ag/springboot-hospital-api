@@ -17,8 +17,10 @@ for every table. Registration and search form the first usable feature; encounte
 status changes add a real business workflow. Laboratory and prescription APIs
 can wait until you are comfortable with transactions and data integrity.
 
-This document is a proposed implementation guide. No endpoint, Java class,
-database migration, or security change is implemented by this document.
+This document is a follow-along implementation guide. API 1 is now implemented;
+see [the registration guide](API1-PATIENT-REGISTRATION.md) for its behavior and
+verification commands. APIs 2 and 3 remain planned. The guide itself does not
+execute migrations or start services.
 
 ## Before starting
 
@@ -83,8 +85,10 @@ Keep controllers thin and put transaction boundaries on public service methods.
 Do not create generic CRUD frameworks or map all 28 tables up front.
 
 Use constructor injection and explicit DTO mapping first. Never serialize JPA
-entities directly. Map database enums to lowercase values deliberately; Java
-`EnumType.STRING` with uppercase constants would not match the current CHECKs.
+entities directly. Map database enums to lowercase values deliberately;
+`EnumType.STRING` alone with uppercase constants would not match the current
+CHECKs. API 1 now uses JPA 3.2 `@EnumeratedValue` and Jackson `@JsonValue` on its
+typed enums to preserve the lowercase database and JSON values.
 
 Use `UUID`, `LocalDate` and `Instant` for UUID, date and timestamptz fields.
 For these exercises, use `@GeneratedValue(strategy = GenerationType.UUID)` on

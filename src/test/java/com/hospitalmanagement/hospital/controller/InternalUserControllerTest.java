@@ -2,6 +2,7 @@ package com.hospitalmanagement.hospital.controller;
 
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
+import com.hospitalmanagement.hospital.common.exception.UnreadableRequestDetails;
 import com.hospitalmanagement.hospital.security.config.UserSecurityConfig;
 import com.hospitalmanagement.hospital.dto.InternalUserDTO;
 import com.hospitalmanagement.hospital.dto.response.InternalUserResponse;
@@ -26,7 +27,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(InternalUserController.class)
-@Import({UserSecurityConfig.class, JwtRoleConverter.class})
+@Import({UserSecurityConfig.class, JwtRoleConverter.class, UnreadableRequestDetails.class})
 class InternalUserControllerTest {
     private static final UUID ID = UUID.fromString("f05bf709-5cb8-4a4c-9ac4-e537b5579aef");
     private static final String PATH = "/api/v1/hospital/technical/users/" + ID;

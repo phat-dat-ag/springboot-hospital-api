@@ -63,6 +63,12 @@ public class UserSecurityConfig {
                 ).permitAll()
 
                 .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/hospital/patients",
+                        "/api/v1/hospital/patients/"
+                ).hasRole("ADMIN")
+
+                .requestMatchers(
                         "/api/v1/hospital/**"
                 ).hasAnyRole("USER", "ADMIN")
                 .anyRequest().authenticated());

@@ -5,6 +5,7 @@ import com.hospitalmanagement.hospital.common.response.APIResponse;
 
 import jakarta.validation.ConstraintViolationException;
 
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +29,9 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+    private final UnreadableRequestDetails unreadableRequestDetails;
 
     private static final Logger log =
             LoggerFactory.getLogger(GlobalExceptionHandler.class);
@@ -99,6 +102,28 @@ public class GlobalExceptionHandler {
     public ResponseEntity<@NonNull APIResponse<Void>> handleInvalidRequestBody(
             HttpMessageNotReadableException ex
     ) {
+        var invalidEnum = unreadableRequestDetails.invalidEnum(ex);
+        if (invalidEnum.isPresent()) {
+            var details = invalidEnum.get();
+            if (RequestContextHolder.getRequestAttributes()
+                    instanceof ServletRequestAttributes attributes
+            ) {
+                RequestLoggingFilter.recordValidationDetails(
+                        attributes.getRequest(),
+                        details.field(),
+                        details.allowedValues()
+                );
+            }
+            return buildErrorResponse(
+                    ErrorCode.INVALID_ENUM_VALUE,
+                    ErrorCode.INVALID_ENUM_VALUE.getMessage(),
+                    new APIError(List.of(new APIError.ErrorDetail(
+                            details.field(),
+                            "INVALID_ENUM_VALUE",
+                            "Must be one of: " + String.join(", ", details.allowedValues())
+                    )))
+            );
+        }
         return buildErrorResponse(
                 ErrorCode.INVALID_REQUEST,
                 ErrorCode.INVALID_REQUEST.getMessage(),

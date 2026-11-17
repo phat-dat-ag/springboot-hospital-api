@@ -60,6 +60,7 @@ public final class StructuredJsonEncoder extends LogstashEncoder {
                 "event", "http.request.method", "http.route",
                 "http.response.status_code", "durationMs", "outcome",
                 "error.category", "error.type", "errorCode", "asyncTimedOut",
+                "validation.field", "validation.allowed_values",
                 "key_count", "startup_ms", "stage", "key_index", "resultCount",
                 "upstream.status", "upstream.errorType"
         )) {
