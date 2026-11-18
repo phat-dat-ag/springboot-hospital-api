@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.security.jwt.user;
 
+import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
 import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
 
@@ -35,6 +36,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class JwtAuthenticationTest {
     @MockitoBean
     private PatientSearchService patientSearchService;
+
+    @MockitoBean
+    private EncounterStatusService encounterStatusService;
 
     @MockitoBean
     private PatientService patients;

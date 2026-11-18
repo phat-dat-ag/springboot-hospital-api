@@ -17,11 +17,11 @@ for every table. Registration and search form the first usable feature; encounte
 status changes add a real business workflow. Laboratory and prescription APIs
 can wait until you are comfortable with transactions and data integrity.
 
-This document is a follow-along implementation guide. Patient registration and
-patient search are now implemented; see [the registration guide](API1-PATIENT-REGISTRATION.md)
-and [the search guide](API2-PATIENT-SEARCH.md) for behavior and verification commands.
-Encounter status changes remain planned. The guide itself does not execute
-migrations or start services.
+This document is a follow-along implementation guide. All three endpoints are
+implemented; see [the registration guide](API1-PATIENT-REGISTRATION.md),
+[the search guide](API2-PATIENT-SEARCH.md) and
+[the encounter status guide](API3-ENCOUNTER-STATUS.md) for behavior and verification.
+The guide itself does not execute migrations or start services.
 
 ## Before starting
 
@@ -446,20 +446,20 @@ clinical rules are a later feature, not an implied production discharge policy.
 
 ### Acceptance tests
 
-- [ ] scheduled → arrived → in_progress → completed succeeds in order.
-- [ ] Each successful request adds exactly one matching history and audit row.
-- [ ] started_at/ended_at are set correctly; created_at is preserved.
-- [ ] Unknown encounter: 404; malformed UUID/state: 400.
-- [ ] Invalid transition and stale expectedStatus: 409 with no changes.
-- [ ] Cancel without reason: 400; valid cancellation preserves its reason.
-- [ ] Soft-deleted patient or unavailable/expired doctor blocks starting care.
-- [ ] Completion without a start timestamp is rejected.
-- [ ] Completed/cancelled visits cannot be reopened by this endpoint.
-- [ ] History/audit failure rolls back status and timestamps.
-- [ ] Two requests with expectedStatus=arrived: one transition succeeds;
+- [x] scheduled → arrived → in_progress → completed succeeds in order.
+- [x] Each successful request adds exactly one matching history and audit row.
+- [x] started_at/ended_at are set correctly; created_at is preserved.
+- [x] Unknown encounter: 404; malformed UUID/state: 400.
+- [x] Invalid transition and stale expectedStatus: 409 with no changes.
+- [x] Cancel without reason: 400; valid cancellation preserves its reason.
+- [x] Soft-deleted patient or unavailable/expired doctor blocks starting care.
+- [x] Completion without a start timestamp is rejected.
+- [x] Completed/cancelled visits cannot be reopened by this endpoint.
+- [x] History/audit failure rolls back status and timestamps.
+- [x] Two requests with expectedStatus=arrived: one transition succeeds;
       the other sees the committed new status and receives 409.
-- [ ] Returned updatedAt reflects the database trigger, not a stale JPA value.
-- [ ] 401/403 behavior is covered.
+- [x] Returned updatedAt reflects the database trigger, not a stale JPA value.
+- [x] 401/403 behavior is covered.
 
 Verify with bound parameters:
 

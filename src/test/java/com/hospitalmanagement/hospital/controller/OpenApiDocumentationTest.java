@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.controller;
 
+import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
 import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
 
@@ -25,6 +26,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OpenApiDocumentationTest {
     @MockitoBean
     private PatientSearchService patientSearchService;
+
+    @MockitoBean
+    private EncounterStatusService encounterStatusService;
 
     @MockitoBean
     private PatientService patients;
@@ -64,6 +68,27 @@ class OpenApiDocumentationTest {
                 )))
                 .andExpect(jsonPath("$.components.schemas.PatientSearchResponse.properties.items")
                         .exists());
+    }
+
+    @Test
+    void encounterStatusDocumentsLifecycleConflictsAndLowercaseStates() throws Exception {
+        String operation = "$.paths['/api/v1/hospital/encounters/{id}/status'].patch";
+        String request = "$.components.schemas.ChangeEncounterStatusRequest.properties";
+
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(operation + ".responses['200']").exists())
+                .andExpect(jsonPath(operation + ".responses['400']").exists())
+                .andExpect(jsonPath(operation + ".responses['401']").exists())
+                .andExpect(jsonPath(operation + ".responses['403']").exists())
+                .andExpect(jsonPath(operation + ".responses['404']").exists())
+                .andExpect(jsonPath(operation + ".responses['409']").exists())
+                .andExpect(jsonPath(operation + ".responses['500']").exists())
+                .andExpect(jsonPath(operation + ".security[0].bearerAuth").isArray())
+                .andExpect(jsonPath(request + ".status.enum").value(containsInAnyOrder(
+                        "scheduled", "arrived", "in_progress",
+                        "completed", "cancelled", "entered_in_error"
+                )));
     }
 
     @Test

@@ -5,7 +5,12 @@ module's Clinical schema. The database is `clinical_db`, using PostgreSQL 17.6
 and the `public` schema. There are **28 business tables**, plus Flyway's own
 `flyway_schema_history` table. Patient registration and search now map the patient,
 contact, audit and access-log subset; see [registration](API1-PATIENT-REGISTRATION.md)
-and [search](API2-PATIENT-SEARCH.md). Other clinical features remain future work.
+and [search](API2-PATIENT-SEARCH.md). The
+[encounter status workflow](API3-ENCOUNTER-STATUS.md) also maps encounters, status
+history and a read subset of doctors. It uses row locks and atomic history/audit
+events without changing V1–V9. Audit events may supply a shared workflow instant;
+omitted timestamps still use now(), including patient registration. Other
+clinical features remain future work.
 Repository findings below describe the earlier
 database-first phase.
 

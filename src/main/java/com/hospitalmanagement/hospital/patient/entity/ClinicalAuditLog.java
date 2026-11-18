@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.FieldNameConstants;
+import org.hibernate.annotations.DynamicInsert;
 import org.hibernate.annotations.Immutable;
 
 import jakarta.persistence.Column;
@@ -37,6 +38,7 @@ import java.util.UUID;
 )
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Immutable
+@DynamicInsert
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ClinicalAuditLog {
@@ -76,8 +78,8 @@ public class ClinicalAuditLog {
     @Column(name = "correlation_id")
     UUID correlationId;
 
-    // PostgreSQL generates this value; it is loaded when the immutable event is read.
-    @Column(name = "occurred_at", nullable = false, insertable = false, updatable = false)
+    // Omitted values use the PostgreSQL default; workflows may supply one event instant.
+    @Column(name = "occurred_at", nullable = false, updatable = false)
     Instant occurredAt;
 
     @Builder
@@ -89,7 +91,8 @@ public class ClinicalAuditLog {
             String entityType,
             UUID entityId,
             String reasonCode,
-            UUID correlationId
+            UUID correlationId,
+            Instant occurredAt
     ) {
         this.patient = patient;
         this.actorUserId = actorUserId;
@@ -99,5 +102,6 @@ public class ClinicalAuditLog {
         this.entityId = entityId;
         this.reasonCode = reasonCode;
         this.correlationId = correlationId;
+        this.occurredAt = occurredAt;
     }
 }
