@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.controller;
 
+import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
 
 import org.junit.jupiter.api.Test;
@@ -9,10 +10,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.hamcrest.Matchers.containsInAnyOrder;
 
 @SpringBootTest(
         properties = "spring.autoconfigure.exclude=" +
@@ -22,6 +23,9 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 )
 @AutoConfigureMockMvc
 class OpenApiDocumentationTest {
+    @MockitoBean
+    private PatientSearchService patientSearchService;
+
     @MockitoBean
     private PatientService patients;
 
@@ -43,6 +47,23 @@ class OpenApiDocumentationTest {
                         .value(containsInAnyOrder("female", "male", "intersex", "unknown")))
                 .andExpect(jsonPath(contact + ".contactType.enum")
                         .value(containsInAnyOrder("self", "emergency", "guardian")));
+    }
+
+    @Test
+    void patientSearchDocumentsFiltersPaginationAndAccessLoggingFailure() throws Exception {
+        String operation = "$.paths['/api/v1/hospital/patients'].get";
+
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(operation + ".responses['200']").exists())
+                .andExpect(jsonPath(operation + ".responses['400']").exists())
+                .andExpect(jsonPath(operation + ".responses['500']").exists())
+                .andExpect(jsonPath(operation + ".security[0].bearerAuth").isArray())
+                .andExpect(jsonPath(operation + ".parameters[*].name").value(containsInAnyOrder(
+                        "medicalRecordNumber", "name", "dateOfBirth", "page", "size", "sort"
+                )))
+                .andExpect(jsonPath("$.components.schemas.PatientSearchResponse.properties.items")
+                        .exists());
     }
 
     @Test

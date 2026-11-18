@@ -33,8 +33,20 @@ public enum ErrorCode {
             HttpStatus.UNAUTHORIZED,
             "Authenticated user identity is invalid"
     ),
+    PATIENT_SEARCH_FILTER_REQUIRED(
+            HttpStatus.BAD_REQUEST,
+            "At least one patient search filter is required"
+    ),
+    PATIENT_SEARCH_PAGE_OUT_OF_RANGE(
+            HttpStatus.BAD_REQUEST,
+            "Page offset exceeds the supported range"
+    ),
 
     // Server errors
+    PATIENT_ACCESS_LOG_FAILED(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "Unable to record patient access"
+    ),
     INTERNAL_SERVER_ERROR(
             HttpStatus.INTERNAL_SERVER_ERROR,
             "An unexpected error occurred"

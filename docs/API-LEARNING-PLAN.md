@@ -17,10 +17,11 @@ for every table. Registration and search form the first usable feature; encounte
 status changes add a real business workflow. Laboratory and prescription APIs
 can wait until you are comfortable with transactions and data integrity.
 
-This document is a follow-along implementation guide. API 1 is now implemented;
-see [the registration guide](API1-PATIENT-REGISTRATION.md) for its behavior and
-verification commands. APIs 2 and 3 remain planned. The guide itself does not
-execute migrations or start services.
+This document is a follow-along implementation guide. Patient registration and
+patient search are now implemented; see [the registration guide](API1-PATIENT-REGISTRATION.md)
+and [the search guide](API2-PATIENT-SEARCH.md) for behavior and verification commands.
+Encounter status changes remain planned. The guide itself does not execute
+migrations or start services.
 
 ## Before starting
 
@@ -302,17 +303,17 @@ to finish these three APIs. Document what a chosen index would support.
 
 ### Acceptance tests
 
-- [ ] Exact MRN, mixed-case name and birth-date filters work independently.
-- [ ] Multiple filters combine correctly; given/family-name OR stays grouped.
-- [ ] Soft-deleted patients never appear, including through exact MRN lookup.
-- [ ] Empty results: 200 with items=[] and totalElements=0.
-- [ ] Zero/negative/oversized sizes, missing filters and bad sorts: 400.
-- [ ] Repeated requests against unchanged data return the same stable ordering.
-- [ ] SQL-like input is treated as data, and literal `%`/`_` work as specified.
-- [ ] No N+1 contact/encounter loads; page count is correct.
-- [ ] Returned patients have access-log rows with the authenticated actor UUID.
-- [ ] A failed access-log insert prevents a successful result response.
-- [ ] 401/403 behavior is covered.
+- [x] Exact MRN, mixed-case name and birth-date filters work independently.
+- [x] Multiple filters combine correctly; given/family-name OR stays grouped.
+- [x] Soft-deleted patients never appear, including through exact MRN lookup.
+- [x] Empty results: 200 with items=[] and totalElements=0.
+- [x] Zero/negative/oversized sizes, missing filters and bad sorts: 400.
+- [x] Repeated requests against unchanged data return the same stable ordering.
+- [x] SQL-like input is treated as data, and literal `%`/`_` work as specified.
+- [x] No N+1 contact/encounter loads; page count is correct.
+- [x] Returned patients have access-log rows with the authenticated actor UUID.
+- [x] A failed access-log insert prevents a successful result response.
+- [x] 401/403 behavior is covered.
 
 **Checkpoint:** explain the difference between filtering in SQL and in Java,
 why pagination needs stable ordering, and why this GET uses a write transaction.

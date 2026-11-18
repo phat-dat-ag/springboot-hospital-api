@@ -69,6 +69,12 @@ public class UserSecurityConfig {
                 ).hasRole("ADMIN")
 
                 .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/hospital/patients",
+                        "/api/v1/hospital/patients/"
+                ).hasRole("ADMIN")
+
+                .requestMatchers(
                         "/api/v1/hospital/**"
                 ).hasAnyRole("USER", "ADMIN")
                 .anyRequest().authenticated());
