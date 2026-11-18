@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.controller;
 
+import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
 
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @AutoConfigureMockMvc
 class HospitalFoundationTest {
+    @MockitoBean
+    private PatientSearchService patientSearchService;
+
     @MockitoBean
     private PatientService patients;
 
@@ -58,9 +62,9 @@ class HospitalFoundationTest {
     }
 
     @Test
-    void patientSearchIsNotImplementedAlongsideRegistration() throws Exception {
+    void patientSearchRequiresAdmin() throws Exception {
         mvc.perform(get("/api/v1/hospital/patients")
                         .with(jwt().authorities(createAuthorityList("ROLE_USER"))))
-                .andExpect(status().isMethodNotAllowed());
+                .andExpect(status().isForbidden());
     }
 }

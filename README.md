@@ -3,11 +3,11 @@
 For a guided next phase, follow the [three-API learning plan](docs/API-LEARNING-PLAN.md)
 for patient registration, patient search and encounter status changes.
 
-This module includes the infrastructure foundation and patient registration
-with transactional contacts and audit metadata. See the
+This module includes patient registration and patient search with transactional
+audit/access metadata. See the [patient search guide](docs/API2-PATIENT-SEARCH.md) and
 [API 1 registration guide](docs/API1-PATIENT-REGISTRATION.md) for requests,
-validation, enum values and tests. Patient search and encounter workflows remain
-future work; no automatic demonstration data is supplied.
+validation, enum values and tests. Encounter workflows remain future work;
+no automatic demonstration data is supplied.
 
 Entry point: `com.hospitalmanagement.hospital.HospitalApiApplication`.
 Coordinates: `com.hospitalmanagement:hospital-api:0.0.1-SNAPSHOT`.
@@ -18,6 +18,7 @@ Coordinates: `com.hospitalmanagement:hospital-api:0.0.1-SNAPSHOT`.
 | `/api/v1/hospital/technical/users/{id}` | Exercise the existing internal User client | USER or ADMIN |
 | `/api/v1/hospital/technical/jwks` | Inspect User public keys via the existing client | USER or ADMIN |
 | `POST /api/v1/hospital/patients` | Register a patient and optional contacts | ADMIN |
+| `GET /api/v1/hospital/patients` | Search active patients with pagination and access logging | ADMIN |
 | `/actuator/health`, `/actuator/health/readiness` | Health and readiness | Public |
 | `/v3/api-docs`, `/swagger-ui/index.html` | OpenAPI | Public |
 

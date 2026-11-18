@@ -2,7 +2,8 @@
 
 Implemented endpoint: `POST /api/v1/hospital/patients`.
 See [the learning plan](API-LEARNING-PLAN.md) and [database reference](DATABASE.md)
-for the wider design. Patient search and encounter status APIs remain later work.
+for the wider design. [Patient search](API2-PATIENT-SEARCH.md) is also implemented;
+encounter status changes remain later work.
 
 ## Request and authentication
 
@@ -52,11 +53,11 @@ Service account. The audit actor comes only from the authenticated JWT subject.
 
 ## Typed enums
 
-| Java enum | JSON / PostgreSQL values |
-| --- | --- |
-| SexAtBirth | female, male, intersex, unknown |
-| ContactType | self, emergency, guardian |
-| AuditActorType | user, service, system |
+| Java enum      | JSON / PostgreSQL values                                      |
+|----------------|---------------------------------------------------------------|
+| SexAtBirth     | female, male, intersex, unknown                               |
+| ContactType    | self, emergency, guardian                                     |
+| AuditActorType | user, service, system                                         |
 | AuditOperation | create, update, sign, cancel, correct, supersede, soft_delete |
 
 DTOs and entities use typed Java enums. `@JsonValue` preserves lowercase JSON
@@ -97,17 +98,17 @@ UUIDs and timestamps are illustrative; contactIds contains one UUID for each
 saved contact. Existing correlation/trace metadata is included when available.
 Null response fields are omitted. No JPA entity is serialized into the response.
 
-| HTTP | Code / meaning |
-| --- | --- |
-| 400 | VALIDATION_ERROR: Bean Validation failure with field/message details |
-| 400 | INVALID_REQUEST: malformed JSON or unrelated database integrity failure |
-| 400 | INVALID_ENUM_VALUE: invalid enum with field name and permitted wire values |
-| 400 | CONTACT_DETAILS_REQUIRED: contact has no usable communication/address value |
-| 400 | CONTACT_NAME_REQUIRED: emergency/guardian contact lacks a name |
-| 400 | DUPLICATE_PRIMARY_CONTACT: two primary contacts share a type |
-| 401 | Missing/invalid token; INVALID_ACTOR_ID for an unusable authenticated UUID subject |
-| 403 | Authenticated caller lacks ADMIN authority |
-| 409 | PATIENT_ALREADY_EXISTS: MRN is already reserved, including after soft deletion |
+| HTTP | Code / meaning                                                                     |
+|------|------------------------------------------------------------------------------------|
+| 400  | VALIDATION_ERROR: Bean Validation failure with field/message details               |
+| 400  | INVALID_REQUEST: malformed JSON or unrelated database integrity failure            |
+| 400  | INVALID_ENUM_VALUE: invalid enum with field name and permitted wire values         |
+| 400  | CONTACT_DETAILS_REQUIRED: contact has no usable communication/address value        |
+| 400  | CONTACT_NAME_REQUIRED: emergency/guardian contact lacks a name                     |
+| 400  | DUPLICATE_PRIMARY_CONTACT: two primary contacts share a type                       |
+| 401  | Missing/invalid token; INVALID_ACTOR_ID for an unusable authenticated UUID subject |
+| 403  | Authenticated caller lacks ADMIN authority                                         |
+| 409  | PATIENT_ALREADY_EXISTS: MRN is already reserved, including after soft deletion     |
 
 Security-filter 401/403 responses retain existing behavior; the application does
 not replace the existing JWT entry point with a new response contract. Error

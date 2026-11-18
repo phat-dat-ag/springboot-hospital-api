@@ -8,6 +8,7 @@ import com.hospitalmanagement.hospital.logging.filter.RequestLoggingFilter;
 import com.hospitalmanagement.hospital.patient.dto.request.RegisterPatientRequest;
 import com.hospitalmanagement.hospital.patient.dto.response.PatientRegistrationResponse;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
+import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.security.config.UserSecurityConfig;
 import com.hospitalmanagement.hospital.security.jwt.user.JwtRoleConverter;
 
@@ -57,6 +58,9 @@ class PatientControllerTest {
 
     @MockitoBean
     private PatientService patients;
+
+    @MockitoBean
+    private PatientSearchService patientSearchService;
 
     @MockitoBean
     private JwtDecoder decoder;
