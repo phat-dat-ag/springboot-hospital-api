@@ -136,7 +136,9 @@ TimestampedEntity. The immutable audit's occurred_at uses the PostgreSQL default
 and is available when the record is read back. It is not configured as a Hibernate
 auto-fetched generated property: that combination with immutable entities fails
 on insertion in the installed Hibernate version. No timestamp callback or
-application-owned substitute was added.
+application-owned substitute was added for registration. The shared audit mapping
+uses DynamicInsert to preserve this default when occurredAt is omitted; encounter
+status changes explicitly supply their shared workflow instant instead.
 
 No Flyway files are changed. Hibernate validates the mapped patient/contact/audit
 subset against the existing schema. Remaining tables are still managed by Flyway.

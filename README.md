@@ -3,11 +3,12 @@
 For a guided next phase, follow the [three-API learning plan](docs/API-LEARNING-PLAN.md)
 for patient registration, patient search and encounter status changes.
 
-This module includes patient registration and patient search with transactional
-audit/access metadata. See the [patient search guide](docs/API2-PATIENT-SEARCH.md) and
-[API 1 registration guide](docs/API1-PATIENT-REGISTRATION.md) for requests,
-validation, enum values and tests. Encounter workflows remain future work;
-no automatic demonstration data is supplied.
+This module includes patient registration, patient search and encounter status
+changes with transactional history/auditing. See the
+[registration guide](docs/API1-PATIENT-REGISTRATION.md),
+[patient search guide](docs/API2-PATIENT-SEARCH.md) and
+[encounter status guide](docs/API3-ENCOUNTER-STATUS.md) for requests, validation,
+enum values and tests. No automatic demonstration data is supplied.
 
 Entry point: `com.hospitalmanagement.hospital.HospitalApiApplication`.
 Coordinates: `com.hospitalmanagement:hospital-api:0.0.1-SNAPSHOT`.
@@ -19,6 +20,7 @@ Coordinates: `com.hospitalmanagement:hospital-api:0.0.1-SNAPSHOT`.
 | `/api/v1/hospital/technical/jwks` | Inspect User public keys via the existing client | USER or ADMIN |
 | `POST /api/v1/hospital/patients` | Register a patient and optional contacts | ADMIN |
 | `GET /api/v1/hospital/patients` | Search active patients with pagination and access logging | ADMIN |
+| `PATCH /api/v1/hospital/encounters/{id}/status` | Change visit status with locking, history and audit | ADMIN |
 | `/actuator/health`, `/actuator/health/readiness` | Health and readiness | Public |
 | `/v3/api-docs`, `/swagger-ui/index.html` | OpenAPI | Public |
 
@@ -38,8 +40,9 @@ Flyway's single migration source is the root `db/migration/hospital/` directory.
 Maven copies it into `db/migration` in the jar, and Compose mounts it read-only
 in the Flyway runner. Build this Dockerfile from the repository root (Compose
 already does this). Hibernate uses `validate`, SQL initialization is disabled,
-and Flyway clean is disabled. Hibernate validates the mapped patient/contact/audit
-entities; Flyway and database tests cover the wider 28-table schema.
+and Flyway clean is disabled. Hibernate validates patient, contact, audit,
+access-log, encounter, history and doctor mappings; Flyway tests cover the wider
+28-table schema.
 
 The nine migrations create all 28 Clinical business tables without seed data.
 See [the complete database reference](docs/DATABASE.md) for every table,
