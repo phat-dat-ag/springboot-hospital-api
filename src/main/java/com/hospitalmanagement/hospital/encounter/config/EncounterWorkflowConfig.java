@@ -11,7 +11,7 @@ import java.time.ZoneId;
 public class EncounterWorkflowConfig {
     @Bean
     public Clock clinicClock(
-            @Value("${app.clinic.time-zone:Asia/Bangkok}")
+            @Value("${app.clinic.time-zone:Asia/Ho_Chi_Minh}")
             String timeZone
     ) {
         return Clock.system(ZoneId.of(timeZone));

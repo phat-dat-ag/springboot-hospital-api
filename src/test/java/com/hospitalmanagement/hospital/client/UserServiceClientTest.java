@@ -23,6 +23,7 @@ import org.slf4j.MDC;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -137,6 +138,85 @@ class UserServiceClientTest {
         assertThat(caller.get()).isEqualTo("hospital-api");
         assertThat(customHeader.get()).isEqualTo("retained");
         assertThat(authorization.get()).isNull();
+    }
+
+    @Test
+    void consumesAuthoritativeRoleWithoutForwardingItToTheTechnicalResponse() {
+        body = """
+                {"user":{"id":"%s","username":"test-user","isActivated":false,"role":4}}
+                """.formatted(ID);
+
+        assertThat(client.getAccountIdentity(ID))
+                .isEqualTo(new UserServiceClient.AccountIdentity(ID, false, 4));
+
+        var technical = new JsonMapper().valueToTree(client.getUser(ID));
+
+        assertThat(technical.path("user").has("role")).isFalse();
+        assertThat(technical.path("user").path("isActivated").asBoolean()).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "null", "\"4\"", "4.0", "4.5", "0", "6", "4294967300", "true", "{}"})
+    void rejectsMissingOrMalformedRolesOnlyForAuthoritativeIdentity(String role) {
+        String field = role.isEmpty() ? "" : ",\"role\":" + role;
+        body = """
+                {"user":{"id":"%s","isActivated":true%s}}
+                """.formatted(ID, field);
+
+        assertThat(client.getUser(ID).user().id()).isEqualTo(ID);
+        assertThatThrownBy(() -> client.getAccountIdentity(ID))
+                .isInstanceOfSatisfying(BusinessException.class, failure ->
+                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE));
+    }
+
+    @Test
+    void missingActivationCannotBeUsedAsAuthoritativeIdentity() {
+        body = "{\"user\":{\"id\":\"" + ID + "\",\"role\":4}}";
+
+        assertThat(client.getUser(ID).user().isActivated()).isFalse();
+        assertThatThrownBy(() -> client.getAccountIdentity(ID))
+                .isInstanceOfSatisfying(BusinessException.class, failure ->
+                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE));
+    }
+
+    @Test
+    void doesNotCoerceAnActivationStringForEligibility() {
+        body = """
+                {"user":{"id":"%s","isActivated":"true","role":4}}
+                """.formatted(ID);
+
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE);
+    }
+
+    @Test
+    void differentiatesAuthoritativeMissingAccountFromOtherDependencyFailures() {
+        status = 404;
+        body = "{\"code\":\"USER_NOT_FOUND\"}";
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_NOT_FOUND);
+        assertFailure();
+
+        body = "{\"code\":\"RESOURCE_NOT_FOUND\"}";
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE);
+
+        status = 503;
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE);
+
+        status = 200;
+        body = "not-json";
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE);
+    }
+
+    @Test
+    void classifiesEligibilityTimeoutAsUnavailable() {
+        delayMillis = 1000;
+        client = client(Duration.ofMillis(100));
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE);
+    }
+
+    private void assertEligibilityFailure(ErrorCode code) {
+        assertThatThrownBy(() -> client.getAccountIdentity(ID))
+                .isInstanceOfSatisfying(BusinessException.class, failure ->
+                        assertThat(failure.getErrorCode()).isEqualTo(code));
     }
 
     @ParameterizedTest

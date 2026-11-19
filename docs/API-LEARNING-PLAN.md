@@ -47,15 +47,10 @@ The guide itself does not execute migrations or start services.
    docker compose logs clinical-database-init flyway-postgres
    ```
 
-8. Confirm migration V9 is successful and obtain an existing valid ADMIN user
-   token through the current User Service. Keep tokens in local client secret
-   variables. Use Swagger UI or an HTTP client; neither requires a new API tool.
-9. Verify the current subject/role using the existing authenticated
-   `/api/v1/hospital/technical/authentication` endpoint.
+8. Confirm migration V9 succeeded. Sign in through User Service with an existing activated STAFF account for the patient APIs. Use an existing ADMIN account for the encounter learning API. Keep both tokens in local client secret variables.
+9. Verify the STAFF token with a filtered patient search. The existing technical authentication endpoint remains available to USER and ADMIN.
 
-**Security for this learning slice:** require ADMIN for these three new routes,
-using narrowly scoped rules before the existing broad Hospital matcher. Keep
-existing routes' behavior unchanged. The current User Service role contract
+**Security for this learning slice.** Patient registration, search and limited demographics require STAFF. The existing encounter status endpoint requires ADMIN. The current User Service role contract
 uses USER=`1`, PATIENT=`2`, STAFF=`3`, DOCTOR=`4` and ADMIN=`5`.
 [PAT-003](API4-PATIENT-DEMOGRAPHICS.md) uses the STAFF role for demographic
 lookup. Audit actor UUIDs come from the validated JWT
@@ -156,7 +151,7 @@ fields as the existing application does. No new patient-detail GET is required.
 | Invalid fields, future birth date, invalid contacts | 400 |
 | MRN already exists, including on a soft-deleted patient | 409 |
 | Missing/invalid token | 401 |
-| Authenticated USER without required ADMIN authority | 403 |
+| Authenticated caller without required STAFF authority | 403 |
 
 ### Step-by-step work
 
@@ -182,7 +177,7 @@ fields as the existing application does. No new patient-detail GET is required.
    is authoritative when requests race. Identify the known constraint when
    translating an integrity exception to a safe 409 response. Let the transaction
    roll back; do not catch a SQL failure and continue saving in that transaction.
-8. Implement the thin controller, ADMIN authorization rule and OpenAPI request/
+8. Implement the thin controller, STAFF authorization rule and OpenAPI request/
    response examples. Return 201 explicitly rather than the existing 200 helper.
 9. Test the complete transaction, not only mocked repository calls.
 
@@ -285,7 +280,7 @@ negative pages, sizes outside 1–100, unknown sort fields or missing filters.
    unaudited result. Write no patient access rows for an empty page. The current
    log schema cannot represent a patientless search attempt; note this boundary
    rather than inventing a fake patient UUID.
-8. Add controller parameter validation, the narrowly scoped ADMIN route rule,
+8. Add controller parameter validation, the narrowly scoped STAFF route rule,
    OpenAPI examples and safe 400 errors.
 9. Run the acceptance tests and inspect actual PostgreSQL queries.
 
@@ -418,7 +413,7 @@ Do not relax the database immutability trigger to accommodate a generic PATCH.
    check the doctor exists, is not soft-deleted and is not expired as of the
    service's configured clinic date. A missing expiry date means unspecified,
    not automatically invalid. Use an injected Clock and explicit clinic timezone
-   for date-based rules, with a configurable Asia/Bangkok learning default.
+   for date-based rules, with a configurable Asia/Ho_Chi_Minh clinic default.
    Lock patient/doctor rows consistently if their active flags must remain stable
    during this write. Keep a fixed lock order across future workflows.
 6. Validate the transition, set only its allowed fields and use a single Clock

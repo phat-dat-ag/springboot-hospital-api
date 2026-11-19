@@ -2,7 +2,7 @@
 
 This is the separate database design and relationship reference for the Hospital
 module's Clinical schema. The database is `clinical_db`, using PostgreSQL 17.6
-and the `public` schema. There are **28 business tables**, plus Flyway's own
+and the `public` schema. There are **29 tables**, plus Flyway's own
 `flyway_schema_history` table. Patient registration and search now map the patient,
 contact, audit and access-log subset; see [registration](API1-PATIENT-REGISTRATION.md)
 and [search](API2-PATIENT-SEARCH.md). The
@@ -56,6 +56,7 @@ read-only. SQL is not duplicated under `src/main/resources`.
 | 7 | [V7__medications_and_prescriptions.sql](../../db/migration/hospital/V7__medications_and_prescriptions.sql) | 5 medication/prescription tables |
 | 8 | [V8__attachments_and_audit.sql](../../db/migration/hospital/V8__attachments_and_audit.sql) | 3 attachment/audit tables |
 | 9 | [V9__integrity_guards_and_query_indexes.sql](../../db/migration/hospital/V9__integrity_guards_and_query_indexes.sql) | Immutability, finite values, timestamp triggers and query indexes |
+| 10 | [V10__encounter_registration_idempotency.sql](../../db/migration/hospital/V10__encounter_registration_idempotency.sql) | Actor-scoped registration replay keys and deferred encounter reference |
 
 PostgreSQL 17 supplies `gen_random_uuid()` natively, so no extension installation
 or extension privilege is necessary. These are a fresh baseline for the previously
@@ -65,7 +66,7 @@ for subsequent changes. No baseline-on-migrate, clean, schema reset or seed data
 
 ## Table overview and timestamp policy
 
-All primary keys are explicit `id uuid PRIMARY KEY DEFAULT gen_random_uuid()`.
+Clinical entity tables use UUID primary keys. The registration key table uses the actor UUID and idempotency key as a composite primary key.
 All foreign keys use NO ACTION on update/delete; there are no cascading deletes.
 All times representing instants use `timestamptz`; display timezone is a client
 choice. Date-only values use `date`. There is no scheduling need for time-only

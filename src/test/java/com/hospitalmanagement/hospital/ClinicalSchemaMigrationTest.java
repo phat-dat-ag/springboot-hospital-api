@@ -16,8 +16,11 @@ import java.util.Objects;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Opt-in, server-free tests against a dedicated empty PostgreSQL database. */
+/**
+ * Opt-in, server-free tests against a dedicated empty PostgreSQL database.
+ */
 @EnabledIfEnvironmentVariable(named = "CLINICAL_DATABASE_TESTS", matches = "true")
 class ClinicalSchemaMigrationTest {
     private static final Set<String> EXPECTED_TABLES = Set.of(
@@ -30,7 +33,7 @@ class ClinicalSchemaMigrationTest {
             "lab_results", "medication_categories", "medications",
             "prescriptions", "prescription_items", "prescription_histories",
             "medical_attachments", "clinical_audit_logs",
-            "medical_record_access_logs"
+            "medical_record_access_logs", "encounter_registration_keys"
     );
 
     private static Flyway flyway;
@@ -38,11 +41,11 @@ class ClinicalSchemaMigrationTest {
     @BeforeAll
     static void migrateEmptyDatabase() throws SQLException {
         try (Connection connection = connect();
-                Statement statement = connection.createStatement();
-                ResultSet result = statement.executeQuery("""
-                        SELECT count(*) FROM information_schema.tables
-                        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-                        """)) {
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("""
+                     SELECT count(*) FROM information_schema.tables
+                     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+                     """)) {
             result.next();
             assertThat(result.getInt(1))
                     .as("Use a dedicated EMPTY test database, never clinical_db")
@@ -61,13 +64,13 @@ class ClinicalSchemaMigrationTest {
                 .baselineOnMigrate(false)
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(9);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(10);
     }
 
     @Test
     void createsExactlyExpectedTablesWithPrimaryAndForeignKeys() throws SQLException {
         try (Connection connection = connect();
-                Statement statement = connection.createStatement()) {
+             Statement statement = connection.createStatement()) {
             Set<String> tables = strings(statement, """
                     SELECT table_name FROM information_schema.tables
                     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
@@ -107,10 +110,10 @@ class ClinicalSchemaMigrationTest {
     @Test
     void enforcesClinicalIntegrityAndTimestampPolicies() throws Exception {
         try (Connection connection = connect();
-                Statement statement = connection.createStatement();
-                var stream = Objects.requireNonNull(
-                        getClass().getResourceAsStream("/db/clinical_schema_checks.sql")
-                )) {
+             Statement statement = connection.createStatement();
+             var stream = Objects.requireNonNull(
+                     getClass().getResourceAsStream("/db/clinical_schema_checks.sql")
+             )) {
             connection.setAutoCommit(false);
             try {
                 statement.execute(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
@@ -125,6 +128,52 @@ class ClinicalSchemaMigrationTest {
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         assertThat(flyway.info().pending()).isEmpty();
+    }
+
+    @Test
+    void rejectsAnIdempotencyClaimWithoutItsEncounterAtCommit() throws SQLException {
+        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+            connection.setAutoCommit(false);
+            try {
+                statement.executeUpdate("""
+                        INSERT INTO encounter_registration_keys (
+                            actor_user_id, idempotency_key, request_digest, encounter_id
+                        ) VALUES (
+                            gen_random_uuid(), 'test-key', decode(repeat('ab', 32), 'hex'),
+                            gen_random_uuid()
+                        )
+                        """);
+                assertThatThrownBy(connection::commit)
+                        .isInstanceOfSatisfying(SQLException.class, failure ->
+                                assertThat(failure.getSQLState()).isEqualTo("23503"));
+            } finally {
+                connection.rollback();
+            }
+        }
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "CLINICAL_UPGRADE_JDBC_URL", matches = ".+")
+    void upgradesAnExistingVersionNineSchema() {
+        String url = requiredEnvironment("CLINICAL_UPGRADE_JDBC_URL");
+
+        assertThat(url).matches("jdbc:postgresql://[^/]+/clinical_upgrade_test(?:\\?.*)?");
+
+        var configuration = Flyway.configure()
+                .dataSource(
+                        url,
+                        requiredEnvironment("CLINICAL_TEST_DB_USER"),
+                        requiredEnvironment("CLINICAL_TEST_DB_PASSWORD")
+                )
+                .locations("classpath:db/migration")
+                .defaultSchema("public")
+                .cleanDisabled(true)
+                .baselineOnMigrate(false);
+        assertThat(configuration.target("9").load().migrate().migrationsExecuted).isEqualTo(9);
+
+        Flyway upgraded = configuration.target("10").load();
+        assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(1);
+        assertThat(upgraded.validateWithResult().validationSuccessful).isTrue();
     }
 
     private static Connection connect() throws SQLException {

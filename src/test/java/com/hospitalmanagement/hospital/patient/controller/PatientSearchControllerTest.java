@@ -79,7 +79,7 @@ class PatientSearchControllerTest {
 
         mvc.perform(get(PATH)
                         .with(jwt().jwt(token -> token.subject(ACTOR.toString()))
-                                .authorities(createAuthorityList("ROLE_ADMIN")))
+                                .authorities(createAuthorityList("ROLE_STAFF")))
                         .param("medicalRecordNumber", " LEARN-0001 "))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -108,7 +108,7 @@ class PatientSearchControllerTest {
                 .willReturn(new PatientSearchResponse(List.of(), 2, 5, 0, 0));
 
         mvc.perform(get(PATH)
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .param("medicalRecordNumber", "EXACT")
                         .param("name", " example ")
                         .param("dateOfBirth", "1995-06-15")
@@ -140,7 +140,7 @@ class PatientSearchControllerTest {
             String value
     ) throws Exception {
         var request = get(PATH)
-                .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")));
+                .with(jwt().authorities(createAuthorityList("ROLE_STAFF")));
 
         if (!"medicalRecordNumber".equals(parameter)) {
             request.param("medicalRecordNumber", "EXACT");
@@ -173,7 +173,7 @@ class PatientSearchControllerTest {
     }
 
     @Test
-    void requiresAdminWithoutChangingOtherEndpointRules() throws Exception {
+    void requiresStaffForSearch() throws Exception {
         mvc.perform(get(PATH).param("name", "example"))
                 .andExpect(status().isUnauthorized());
 
@@ -190,7 +190,7 @@ class PatientSearchControllerTest {
         given(searches.searchPatients(any(), any()))
                 .willThrow(new BusinessException(ErrorCode.PATIENT_SEARCH_FILTER_REQUIRED));
 
-        mvc.perform(get(PATH).with(jwt().authorities(createAuthorityList("ROLE_ADMIN"))))
+        mvc.perform(get(PATH).with(jwt().authorities(createAuthorityList("ROLE_STAFF"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PATIENT_SEARCH_FILTER_REQUIRED"));
     }
@@ -201,7 +201,7 @@ class PatientSearchControllerTest {
                 .willThrow(new BusinessException(ErrorCode.PATIENT_ACCESS_LOG_FAILED));
 
         mvc.perform(get(PATH)
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .param("name", "example")
                 )
                 .andExpect(status().isInternalServerError())

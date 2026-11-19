@@ -22,6 +22,8 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 
@@ -52,7 +54,10 @@ public class PatientServiceImpl implements PatientService {
         try {
             actorUserId = UUID.fromString(authenticatedSubject);
         } catch (IllegalArgumentException | NullPointerException exception) {
-            log.warn("Invalid actor id: {}", authenticatedSubject);
+            log.atWarn()
+                    .addKeyValue("event", "patient.registration.rejected")
+                    .addKeyValue("errorCode", ErrorCode.INVALID_ACTOR_ID.name())
+                    .log("Patient registration rejected");
 
             throw new BusinessException(ErrorCode.INVALID_ACTOR_ID);
         }
@@ -71,10 +76,10 @@ public class PatientServiceImpl implements PatientService {
             patientRepository.saveAndFlush(patient);
         } catch (DataIntegrityViolationException exception) {
             if (isDuplicateMedicalRecordNumber(exception)) {
-                log.error(
-                        "Patient is already existed, exception={}",
-                        exception.getMessage()
-                );
+                log.atWarn()
+                        .addKeyValue("event", "patient.registration.rejected")
+                        .addKeyValue("errorCode", ErrorCode.PATIENT_ALREADY_EXISTS.name())
+                        .log("Patient registration rejected");
 
                 // Exit immediately: the failed transaction must roll back.
                 throw new BusinessException(ErrorCode.PATIENT_ALREADY_EXISTS);
@@ -90,15 +95,6 @@ public class PatientServiceImpl implements PatientService {
                         .toList()
         );
 
-        log.info(
-                "Saved {} patient contacts, patientId={}, contactIds={}",
-                savedContacts.size(),
-                patient.getId(),
-                savedContacts.stream()
-                        .map(PatientContact::getId)
-                        .toList()
-        );
-
         ClinicalAuditLog event = ClinicalAuditLog.builder()
                 .patient(patient)
                 .actorUserId(actorUserId)
@@ -108,24 +104,15 @@ public class PatientServiceImpl implements PatientService {
                 .entityId(patient.getId())
                 .build();
 
-        ClinicalAuditLog savedEvent = clinicalAuditLogRepository.saveAndFlush(event);
-
-        log.info(
-                "Clinical audit event saved: auditId={}, actorUserId={}, "
-                        + "actorType={}, operation={}, entityType={}, entityId={}",
-                savedEvent.getId(),
-                savedEvent.getActorUserId(),
-                savedEvent.getActorType(),
-                savedEvent.getOperation(),
-                savedEvent.getEntityType(),
-                savedEvent.getEntityId()
-        );
+        clinicalAuditLogRepository.saveAndFlush(event);
 
         List<UUID> contactIds = savedContacts.stream()
                 .map(PatientContact::getId)
                 .toList();
 
-        PatientRegistrationResponse response = new PatientRegistrationResponse(
+        logAfterCommit(contactIds.size());
+
+        return new PatientRegistrationResponse(
                 patient.getId(),
                 patient.getMedicalRecordNumber(),
                 patient.getGivenName(),
@@ -135,14 +122,23 @@ public class PatientServiceImpl implements PatientService {
                 patient.getCreatedAt(),
                 contactIds
         );
+    }
 
-        log.info(
-                "Patient registration completed: patientId={}, contactCount={}",
-                response.id(),
-                response.contactIds().size()
-        );
+    private void logAfterCommit(int contactCount) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
 
-        return response;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                log.atInfo()
+                        .addKeyValue("event", "patient.registration.completed")
+                        .addKeyValue("stage", "committed")
+                        .addKeyValue("contactCount", contactCount)
+                        .log("Patient registration completed");
+            }
+        });
     }
 
     private void validateContacts(List<ContactRequest> requestedContacts) {

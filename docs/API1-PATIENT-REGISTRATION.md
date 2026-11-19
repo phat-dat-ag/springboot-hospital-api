@@ -7,8 +7,8 @@ encounter status changes remain later work.
 
 ## Request and authentication
 
-Send `Content-Type: application/json` and an existing valid ADMIN bearer token.
-The current User Service contract maps numeric role 5 to ROLE_ADMIN.
+Send `Content-Type: application/json` and an existing valid STAFF bearer token.
+The current User Service contract maps numeric role 3 to ROLE_STAFF.
 USER tokens receive 403 for this POST route. Other existing routes retain their
 previous authorization rules. Token issuer, algorithm, JWKS, and internal service
 authentication have not changed.
@@ -107,7 +107,7 @@ Null response fields are omitted. No JPA entity is serialized into the response.
 | 400  | CONTACT_NAME_REQUIRED: emergency/guardian contact lacks a name                     |
 | 400  | DUPLICATE_PRIMARY_CONTACT: two primary contacts share a type                       |
 | 401  | Missing/invalid token; INVALID_ACTOR_ID for an unusable authenticated UUID subject |
-| 403  | Authenticated caller lacks ADMIN authority                                         |
+| 403  | Authenticated caller lacks STAFF authority                                         |
 | 409  | PATIENT_ALREADY_EXISTS: MRN is already reserved, including after soft deletion     |
 
 Security-filter 401/403 responses retain existing behavior; the application does
@@ -188,3 +188,33 @@ opt-in migration/startup skips. This includes all eight real-PostgreSQL
 registration tests, nine DTO tests, five controller tests, and OpenAPI/security
 regressions. Maven packaging also succeeds. The isolated container and its
 temporary volume are removed after verification; no development data is reset.
+
+### STAFF receptionist workflow
+
+Sign in through User Service with an existing activated STAFF account. Use the
+issued bearer token in a local client secret. Use synthetic patients only.
+
+1. Search by exact MRN, name, or date of birth using [PAT-002](API2-PATIENT-SEARCH.md).
+2. Select the matching chart or register a new chart with an explicit MRN and
+   optional contacts. A reserved MRN returns `409 PATIENT_ALREADY_EXISTS`,
+   including when its chart has been soft-deleted. Registration creates no User
+   account or external account link.
+3. Open the returned patient UUID through [PAT-003](API4-PATIENT-DEMOGRAPHICS.md).
+   A missing or inactive chart returns 404.
+
+| Authentication | Register | Search | Limited demographics |
+| --- | --- | --- | --- |
+| STAFF | 201 | 200 | 200 for an active chart |
+| USER, PATIENT, DOCTOR, ADMIN | 403 | 403 | 403 |
+| Missing or invalid bearer | 401 | 401 | 401 |
+
+HTTP HEAD for the search and demographics routes uses the same STAFF gate.
+Registration writes the chart, contacts, and clinical audit in one transaction.
+Search and demographics persist access audit before returning data. Registration
+success logs are emitted after commit and contain operational metadata. The
+demographic response uses `Cache-Control: no-store`.
+
+The policy covers a single synthetic outpatient clinic. Production deployments
+with multiple clinics or care teams may require explicit resource-level grants.
+The existing optional contact address remains free text with no API length cap.
+A new cap needs a separate compatibility decision.

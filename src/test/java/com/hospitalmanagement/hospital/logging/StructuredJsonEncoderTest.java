@@ -83,18 +83,21 @@ class StructuredJsonEncoderTest {
             assertThat(normal.path("durationMs").isNumber()).isTrue();
             assertThat(normal.path("@timestamp").asText()).matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z");
 
-            var databaseEvent = new ch.qos.logback.classic.spi.LoggingEvent();
+            for (String loggerName : List.of(
+                    "org.hibernate.engine.jdbc.spi.SqlExceptionHelper",
+                    "org.hibernate.orm.jdbc.error"
+            )) {
+                var databaseEvent = new ch.qos.logback.classic.spi.LoggingEvent();
+                databaseEvent.setTimeStamp(System.currentTimeMillis());
+                databaseEvent.setThreadName("test");
+                databaseEvent.setMDCPropertyMap(Map.of());
+                databaseEvent.setLoggerName(loggerName);
+                databaseEvent.setLevel(Level.ERROR);
+                databaseEvent.setMessage("Duplicate entry private-email-secret@example.invalid");
 
-            databaseEvent.setTimeStamp(System.currentTimeMillis());
-            databaseEvent.setThreadName("test");
-            databaseEvent.setMDCPropertyMap(Map.of());
-            databaseEvent.setLoggerName("org.hibernate.engine.jdbc.spi.SqlExceptionHelper");
-            databaseEvent.setLevel(Level.ERROR);
-            databaseEvent.setMessage("Duplicate entry private-email-secret@example.invalid");
-
-            var database = mapper.readTree(encoder.encode(databaseEvent));
-
-            assertThat(database.toString()).doesNotContain("private-email-secret");
+                var database = mapper.readTree(encoder.encode(databaseEvent));
+                assertThat(database.toString()).doesNotContain("private-email-secret");
+            }
 
             var error = mapper.readTree(encoder.encode(events.get(1)));
 

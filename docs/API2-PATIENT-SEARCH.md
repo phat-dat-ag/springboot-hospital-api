@@ -7,7 +7,7 @@ from [DATABASE.md](DATABASE.md). Encounter status changes remain planned.
 ## Contract
 
 Authentication uses the existing bearer token/JWKS configuration. This GET route
-requires ADMIN, matching patient registration. It does not change permissions
+requires STAFF, matching patient registration. It does not change permissions
 for the technical endpoints or alter token issuers, claims, algorithms or keys.
 
 Examples:
@@ -75,7 +75,7 @@ otherwise matching search has empty items while retaining the matching total.
 | 400 | PATIENT_SEARCH_FILTER_REQUIRED when no search filter is supplied |
 | 400 | PATIENT_SEARCH_PAGE_OUT_OF_RANGE when the JPA offset limit is exceeded |
 | 401 | Missing/invalid token; INVALID_ACTOR_ID for an invalid authenticated UUID subject |
-| 403 | Caller lacks ADMIN authority |
+| 403 | Caller lacks STAFF authority |
 | 500 | PATIENT_ACCESS_LOG_FAILED when access events cannot be persisted; no successful results are returned |
 
 Existing framework security responses remain unchanged. General unexpected

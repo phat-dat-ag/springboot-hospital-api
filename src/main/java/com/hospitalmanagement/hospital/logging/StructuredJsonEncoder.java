@@ -64,7 +64,7 @@ public final class StructuredJsonEncoder extends LogstashEncoder {
                 "search.filters", "search.page", "search.size", "search.sort",
                 "search.total_elements", "search.total_pages", "accessLogCount",
                 "encounter.from_status", "encounter.to_status",
-                "key_count", "startup_ms", "stage", "key_index", "resultCount",
+                "key_count", "startup_ms", "stage", "key_index", "resultCount", "contactCount",
                 "upstream.status", "upstream.errorType"
         )) {
             addIncludeKeyValueKeyName(name);

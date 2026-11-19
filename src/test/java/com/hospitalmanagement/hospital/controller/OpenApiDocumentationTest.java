@@ -1,5 +1,8 @@
 package com.hospitalmanagement.hospital.controller;
 
+import com.hospitalmanagement.hospital.encounter.doctor.DoctorCandidates;
+import com.hospitalmanagement.hospital.encounter.registration.EncounterRegistrationService;
+import com.hospitalmanagement.hospital.encounter.registration.EncounterRegistrationStore;
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
 import com.hospitalmanagement.hospital.patient.service.PatientDemographicsService;
 import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
@@ -23,6 +26,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration," +
                 "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration"
 )
+@MockitoBean(types = {
+        DoctorCandidates.class,
+        EncounterRegistrationService.class,
+        EncounterRegistrationStore.class
+})
 @AutoConfigureMockMvc
 class OpenApiDocumentationTest {
     @MockitoBean
@@ -49,6 +57,8 @@ class OpenApiDocumentationTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(operation + ".responses['201']").exists())
+                .andExpect(jsonPath(operation + ".responses['403'].description")
+                        .value("STAFF authority required"))
                 .andExpect(jsonPath(operation + ".responses['409']").exists())
                 .andExpect(jsonPath(operation + ".security[0].bearerAuth").isArray())
                 .andExpect(jsonPath(request + ".sexAtBirth.enum")
@@ -65,6 +75,8 @@ class OpenApiDocumentationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(operation + ".responses['200']").exists())
                 .andExpect(jsonPath(operation + ".responses['400']").exists())
+                .andExpect(jsonPath(operation + ".responses['403'].description")
+                        .value("STAFF authority required"))
                 .andExpect(jsonPath(operation + ".responses['500']").exists())
                 .andExpect(jsonPath(operation + ".security[0].bearerAuth").isArray())
                 .andExpect(jsonPath(operation + ".parameters[*].name").value(containsInAnyOrder(
