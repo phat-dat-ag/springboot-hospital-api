@@ -82,7 +82,7 @@ from the PostgreSQL update trigger, not the service Clock.
 
 A doctor's license remains valid on its expiry date. Null expiry means
 unspecified. Checks use the injected clinic Clock and its explicit timezone:
-`app.clinic.time-zone=${CLINIC_TIME_ZONE:Asia/Bangkok}`. Supply the environment
+`app.clinic.time-zone=${CLINIC_TIME_ZONE:Asia/Ho_Chi_Minh}`. Supply the environment
 variable to the application process to override it. Spring does not read a root
 .env file automatically. Event timestamps are Instant values regardless of zone.
 Doctor availability is rechecked when starting care; completion requires the

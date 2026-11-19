@@ -413,7 +413,7 @@ Do not relax the database immutability trigger to accommodate a generic PATCH.
    check the doctor exists, is not soft-deleted and is not expired as of the
    service's configured clinic date. A missing expiry date means unspecified,
    not automatically invalid. Use an injected Clock and explicit clinic timezone
-   for date-based rules, with a configurable Asia/Bangkok learning default.
+   for date-based rules, with a configurable Asia/Ho_Chi_Minh clinic default.
    Lock patient/doctor rows consistently if their active flags must remain stable
    during this write. Keep a fixed lock order across future workflows.
 6. Validate the transition, set only its allowed fields and use a single Clock
