@@ -1,6 +1,7 @@
 package com.hospitalmanagement.hospital.security.jwt.user;
 
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
+import com.hospitalmanagement.hospital.patient.service.PatientDemographicsService;
 import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
 
@@ -36,6 +37,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class JwtAuthenticationTest {
     @MockitoBean
     private PatientSearchService patientSearchService;
+
+    @MockitoBean
+    private PatientDemographicsService demographics;
 
     @MockitoBean
     private EncounterStatusService encounterStatusService;
@@ -96,7 +100,7 @@ class JwtAuthenticationTest {
     @Test
     void adminTokenWithV2() throws Exception {
         mvc.perform(get("/api/v1/hospital/technical/authentication").header("Authorization", "Bearer " +
-                        token(V2, claims().claim("role", 2))))
+                        token(V2, claims().claim("role", 5))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.authorities").value(org.hamcrest.Matchers.hasItem("ROLE_ADMIN")));
     }

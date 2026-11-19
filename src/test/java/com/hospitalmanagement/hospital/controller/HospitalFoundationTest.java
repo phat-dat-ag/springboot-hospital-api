@@ -1,6 +1,7 @@
 package com.hospitalmanagement.hospital.controller;
 
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
+import com.hospitalmanagement.hospital.patient.service.PatientDemographicsService;
 import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
 
@@ -28,6 +29,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class HospitalFoundationTest {
     @MockitoBean
     private PatientSearchService patientSearchService;
+
+    @MockitoBean
+    private PatientDemographicsService demographics;
 
     @MockitoBean
     private EncounterStatusService encounterStatusService;

@@ -1,6 +1,7 @@
 package com.hospitalmanagement.hospital.controller;
 
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
+import com.hospitalmanagement.hospital.patient.service.PatientDemographicsService;
 import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
 
@@ -26,6 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class OpenApiDocumentationTest {
     @MockitoBean
     private PatientSearchService patientSearchService;
+
+    @MockitoBean
+    private PatientDemographicsService demographics;
 
     @MockitoBean
     private EncounterStatusService encounterStatusService;
@@ -68,6 +72,21 @@ class OpenApiDocumentationTest {
                 )))
                 .andExpect(jsonPath("$.components.schemas.PatientSearchResponse.properties.items")
                         .exists());
+    }
+
+    @Test
+    void patientDemographicsDocumentsBearerAuthAndFailureResponses() throws Exception {
+        String operation = "$.paths['/api/v1/hospital/patients/{id}'].get";
+
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(operation + ".parameters[0].name").value("id"))
+                .andExpect(jsonPath(operation + ".parameters[0].required").value(true))
+                .andExpect(jsonPath(operation + ".responses['200']").exists())
+                .andExpect(jsonPath(operation + ".responses['403']").exists())
+                .andExpect(jsonPath(operation + ".responses['404']").exists())
+                .andExpect(jsonPath(operation + ".responses['500']").exists())
+                .andExpect(jsonPath(operation + ".security[0].bearerAuth").isArray());
     }
 
     @Test
