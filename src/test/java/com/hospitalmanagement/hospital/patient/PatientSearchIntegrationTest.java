@@ -58,6 +58,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class PatientSearchIntegrationTest {
+    private static final UUID DEMOGRAPHICS_STAFF_ID = UUID.randomUUID();
+    private static final UUID DEMOGRAPHICS_PATIENT_ID = UUID.randomUUID();
+
     private static final UUID FAILURE_ACTOR =
             UUID.fromString("00000000-0000-0000-0000-00000000f001");
     private static final Instant SAME_CREATED_AT = Instant.parse("2026-11-01T00:00:00Z");
@@ -117,6 +120,43 @@ class PatientSearchIntegrationTest {
                 BEFORE INSERT ON medical_record_access_logs
                 FOR EACH ROW EXECUTE FUNCTION test_search_log_failure()
                 """);
+    }
+
+    @Test
+    void readsActiveDemographicsAndCommitsAccessLogInPostgres() throws Exception {
+        jdbc.update(
+                """
+                        INSERT INTO patients (id, medical_record_number, given_name, sex_at_birth)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                DEMOGRAPHICS_PATIENT_ID,
+                "pat-" + DEMOGRAPHICS_PATIENT_ID,
+                "Example",
+                "unknown"
+        );
+
+        String path = "/api/v1/hospital/patients/" + DEMOGRAPHICS_PATIENT_ID;
+
+        mvc.perform(get(path).with(jwt()
+                        .jwt(token -> token.subject(DEMOGRAPHICS_STAFF_ID.toString()))
+                        .authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(DEMOGRAPHICS_PATIENT_ID.toString()))
+                .andExpect(jsonPath("$.data.sexAtBirth").value("unknown"))
+                .andExpect(jsonPath("$.data.updatedAt").exists());
+
+        Integer committedEvents = jdbc.queryForObject(
+                """
+                        SELECT count(*) FROM medical_record_access_logs
+                        WHERE patient_id = ? AND actor_user_id = ? AND operation = 'view'
+                          AND outcome = 'allowed' AND correlation_id IS NOT NULL
+                        """,
+                Integer.class,
+                DEMOGRAPHICS_PATIENT_ID,
+                DEMOGRAPHICS_STAFF_ID
+        );
+
+        assertThat(committedEvents).isEqualTo(1);
     }
 
     @Test

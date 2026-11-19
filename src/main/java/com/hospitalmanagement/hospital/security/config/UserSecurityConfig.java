@@ -1,17 +1,18 @@
 package com.hospitalmanagement.hospital.security.config;
 
+import com.hospitalmanagement.hospital.security.jwt.user.JwtRoleConverter;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import com.hospitalmanagement.hospital.security.jwt.user.JwtRoleConverter;
-import org.springframework.security.config.ObjectPostProcessor;
-import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
 
 /**
@@ -21,31 +22,40 @@ import org.springframework.security.web.authentication.AuthenticationEntryPointF
 public class UserSecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtRoleConverter roles) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtRoleConverter roles
+    ) throws Exception {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
 
         converter.setJwtGrantedAuthoritiesConverter(roles);
 
         http.csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .oauth2ResourceServer(server -> server
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(converter))
-                        .withObjectPostProcessor(new ObjectPostProcessor<BearerTokenAuthenticationFilter>() {
-                                                     @Override
-                                                     public <O extends BearerTokenAuthenticationFilter> O postProcess(O filter) {
-                                                         var failureHandler = new AuthenticationEntryPointFailureHandler(
-                                                                 new BearerTokenAuthenticationEntryPoint()
-                                                         );
-
-                                                         // JWKS retrieval failures must also fail authentication with 401.
-                                                         failureHandler.setRethrowAuthenticationServiceException(false);
-                                                         filter.setAuthenticationFailureHandler(failureHandler);
-
-                                                         return filter;
-                                                     }
-                                                 }
-                        )
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 );
+
+        http.oauth2ResourceServer(server -> server
+                .jwt(jwt -> jwt.jwtAuthenticationConverter(converter))
+                .withObjectPostProcessor(
+                        new ObjectPostProcessor<BearerTokenAuthenticationFilter>() {
+                            @Override
+                            public <O extends BearerTokenAuthenticationFilter> O postProcess(
+                                    O filter
+                            ) {
+                                var entryPoint = new BearerTokenAuthenticationEntryPoint();
+                                var failureHandler =
+                                        new AuthenticationEntryPointFailureHandler(entryPoint);
+
+                                // Return 401 when key retrieval fails.
+                                failureHandler.setRethrowAuthenticationServiceException(false);
+                                filter.setAuthenticationFailureHandler(failureHandler);
+
+                                return filter;
+                            }
+                        }
+                )
+        );
 
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers(
@@ -73,6 +83,18 @@ public class UserSecurityConfig {
                         "/api/v1/hospital/patients",
                         "/api/v1/hospital/patients/"
                 ).hasRole("ADMIN")
+
+                .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/hospital/patients/*",
+                        "/api/v1/hospital/patients/*/"
+                ).hasRole("STAFF")
+
+                .requestMatchers(
+                        HttpMethod.HEAD,
+                        "/api/v1/hospital/patients/*",
+                        "/api/v1/hospital/patients/*/"
+                ).hasRole("STAFF")
 
                 .requestMatchers(
                         HttpMethod.PATCH,

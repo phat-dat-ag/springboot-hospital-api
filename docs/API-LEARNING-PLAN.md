@@ -55,10 +55,10 @@ The guide itself does not execute migrations or start services.
 
 **Security for this learning slice:** require ADMIN for these three new routes,
 using narrowly scoped rules before the existing broad Hospital matcher. Keep
-existing routes' behavior unchanged. The repository currently maps role `1` to
-USER and `2` to ADMIN; it has no doctor/receptionist claims. Do not invent claims,
-change JWT/JWKS contracts, or treat every USER as hospital staff. Real clinical
-permissions are a later feature. Audit actor UUIDs come from the validated JWT
+existing routes' behavior unchanged. The current User Service role contract
+uses USER=`1`, PATIENT=`2`, STAFF=`3`, DOCTOR=`4` and ADMIN=`5`.
+[PAT-003](API4-PATIENT-DEMOGRAPHICS.md) uses the STAFF role for demographic
+lookup. Audit actor UUIDs come from the validated JWT
 subject, which the current User Service issues as its user UUID, never a request
 body. A doctor UUID is a separate local clinical identifier.
 

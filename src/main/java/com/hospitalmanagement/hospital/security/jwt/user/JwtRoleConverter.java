@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.security.jwt.user;
 
+import lombok.NonNull;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -11,10 +12,13 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-public class JwtRoleConverter implements Converter<Jwt, Collection<GrantedAuthority>> {
+public class JwtRoleConverter implements Converter<@NonNull Jwt, Collection<GrantedAuthority>> {
     private static final Map<String, String> ROLES = Map.of(
             "1", "ROLE_USER",
-            "2", "ROLE_ADMIN"
+            "2", "ROLE_PATIENT",
+            "3", "ROLE_STAFF",
+            "4", "ROLE_DOCTOR",
+            "5", "ROLE_ADMIN"
     );
 
     @Override

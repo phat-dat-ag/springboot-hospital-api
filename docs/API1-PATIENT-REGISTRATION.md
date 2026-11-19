@@ -8,7 +8,7 @@ encounter status changes remain later work.
 ## Request and authentication
 
 Send `Content-Type: application/json` and an existing valid ADMIN bearer token.
-The current role mapping remains unchanged: numeric role 2 becomes ROLE_ADMIN.
+The current User Service contract maps numeric role 5 to ROLE_ADMIN.
 USER tokens receive 403 for this POST route. Other existing routes retain their
 previous authorization rules. Token issuer, algorithm, JWKS, and internal service
 authentication have not changed.
