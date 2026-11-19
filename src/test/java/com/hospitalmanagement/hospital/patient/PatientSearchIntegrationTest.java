@@ -310,7 +310,7 @@ class PatientSearchIntegrationTest {
 
         mvc.perform(get("/api/v1/hospital/patients")
                         .with(jwt().jwt(token -> token.subject(FAILURE_ACTOR.toString()))
-                                .authorities(createAuthorityList("ROLE_ADMIN")))
+                                .authorities(createAuthorityList("ROLE_STAFF")))
                         .param("name", fixture.prefix()))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("PATIENT_ACCESS_LOG_FAILED"))

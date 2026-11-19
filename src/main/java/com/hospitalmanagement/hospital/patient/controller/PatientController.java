@@ -39,13 +39,13 @@ public class PatientController extends BaseController {
     @GetMapping
     @Operation(
             summary = "Search active patients",
-            description = "Requires ADMIN and at least one filter. Returned records are access-logged."
+            description = "Requires STAFF and at least one filter. Returned records are access-logged."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Patient search results, possibly empty"),
             @ApiResponse(responseCode = "400", description = "Invalid filters, pagination or sort"),
             @ApiResponse(responseCode = "401", description = "Invalid or missing authentication"),
-            @ApiResponse(responseCode = "403", description = "ADMIN authority required"),
+            @ApiResponse(responseCode = "403", description = "STAFF authority required"),
             @ApiResponse(responseCode = "500", description = "Unable to record patient access")
     })
     public ResponseEntity<@NonNull APIResponse<PatientSearchResponse>> searchPatients(
@@ -65,13 +65,13 @@ public class PatientController extends BaseController {
     @PostMapping
     @Operation(
             summary = "Register a patient and optional contacts",
-            description = "Requires ADMIN. Saves patient, contacts and audit metadata atomically."
+            description = "Requires STAFF. Saves patient, contacts and audit metadata atomically."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Patient registered"),
             @ApiResponse(responseCode = "400", description = "Invalid registration or contacts"),
             @ApiResponse(responseCode = "401", description = "Invalid or missing authentication"),
-            @ApiResponse(responseCode = "403", description = "ADMIN authority required"),
+            @ApiResponse(responseCode = "403", description = "STAFF authority required"),
             @ApiResponse(responseCode = "409", description = "Medical record number already exists")
     })
     public ResponseEntity<@NonNull APIResponse<PatientRegistrationResponse>> registerPatient(

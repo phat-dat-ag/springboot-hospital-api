@@ -49,6 +49,8 @@ class OpenApiDocumentationTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(operation + ".responses['201']").exists())
+                .andExpect(jsonPath(operation + ".responses['403'].description")
+                        .value("STAFF authority required"))
                 .andExpect(jsonPath(operation + ".responses['409']").exists())
                 .andExpect(jsonPath(operation + ".security[0].bearerAuth").isArray())
                 .andExpect(jsonPath(request + ".sexAtBirth.enum")
@@ -65,6 +67,8 @@ class OpenApiDocumentationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(operation + ".responses['200']").exists())
                 .andExpect(jsonPath(operation + ".responses['400']").exists())
+                .andExpect(jsonPath(operation + ".responses['403'].description")
+                        .value("STAFF authority required"))
                 .andExpect(jsonPath(operation + ".responses['500']").exists())
                 .andExpect(jsonPath(operation + ".security[0].bearerAuth").isArray())
                 .andExpect(jsonPath(operation + ".parameters[*].name").value(containsInAnyOrder(

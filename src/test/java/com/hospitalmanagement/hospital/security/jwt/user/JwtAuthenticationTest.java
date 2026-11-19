@@ -1,6 +1,9 @@
 package com.hospitalmanagement.hospital.security.jwt.user;
 
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
+import com.hospitalmanagement.hospital.patient.dto.response.PatientDemographicsResponse;
+import com.hospitalmanagement.hospital.patient.dto.response.PatientRegistrationResponse;
+import com.hospitalmanagement.hospital.patient.dto.response.PatientSearchResponse;
 import com.hospitalmanagement.hospital.patient.service.PatientDemographicsService;
 import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
@@ -12,14 +15,18 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.*;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +36,13 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = "spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration")
@@ -48,6 +61,9 @@ class JwtAuthenticationTest {
     private PatientService patients;
 
     private static final String ISSUER = "hospital-user-service";
+    private static final String PATIENTS = "/api/v1/hospital/patients";
+    private static final UUID PATIENT_ID = UUID.randomUUID();
+    private static final String STAFF_SUBJECT = UUID.randomUUID().toString();
     private static final RSAKey V1 = key("test-v1");
     private static final RSAKey V2 = key("test-v2");
     private static final RSAKey UNKNOWN = key("unknown");
@@ -84,6 +100,88 @@ class JwtAuthenticationTest {
     @Test
     void malformedToken() throws Exception {
         request("not.a.jwt", 401);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 4, 5})
+    void deniesNonStaffOnEveryPatientRoute(int role) throws Exception {
+        String bearer = "Bearer " + token(V1, claims().subject(STAFF_SUBJECT).claim("role", role));
+
+        for (MockHttpServletRequestBuilder request : patientRequests()) {
+            mvc.perform(request.header("Authorization", bearer))
+                    .andExpect(status().isForbidden());
+        }
+
+        verifyNoInteractions(patients, patientSearchService, demographics);
+    }
+
+    @Test
+    void requiresValidAuthenticationOnEveryPatientRoute() throws Exception {
+        for (MockHttpServletRequestBuilder request : patientRequests()) {
+            mvc.perform(request).andExpect(status().isUnauthorized());
+            mvc.perform(request.header("Authorization", "Bearer not.a.jwt"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        verifyNoInteractions(patients, patientSearchService, demographics);
+    }
+
+    @Test
+    void signedStaffTokenCanRegisterSearchAndReadDemographics() throws Exception {
+        String bearer = "Bearer " + token(V1, claims().subject(STAFF_SUBJECT).claim("role", 3));
+        Instant timestamp = Instant.now();
+
+        given(patients.registerPatient(any(), eq(STAFF_SUBJECT)))
+                .willReturn(new PatientRegistrationResponse(
+                        PATIENT_ID, "P01-001", "Example", null, null, null, timestamp, List.of()
+                ));
+        given(patientSearchService.searchPatients(any(), eq(STAFF_SUBJECT)))
+                .willReturn(new PatientSearchResponse(List.of(), 0, 20, 0, 0));
+        given(demographics.getDemographics(PATIENT_ID, STAFF_SUBJECT))
+                .willReturn(new PatientDemographicsResponse(
+                        PATIENT_ID, "P01-001", "Example", null, null, null, timestamp
+                ));
+
+        mvc.perform(registrationRequest(PATIENTS).header("Authorization", bearer))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value(PATIENT_ID.toString()));
+        mvc.perform(get(PATIENTS).param("name", "Example").header("Authorization", bearer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty());
+        mvc.perform(head(PATIENTS).param("name", "Example").header("Authorization", bearer))
+                .andExpect(status().isOk());
+        mvc.perform(get(PATIENTS + "/" + PATIENT_ID).header("Authorization", bearer))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.id").value(PATIENT_ID.toString()));
+        mvc.perform(head(PATIENTS + "/" + PATIENT_ID).header("Authorization", bearer))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    private static List<MockHttpServletRequestBuilder> patientRequests() {
+        String demographicsPath = PATIENTS + "/" + PATIENT_ID;
+
+        return List.of(
+                registrationRequest(PATIENTS),
+                registrationRequest(PATIENTS + "/"),
+                get(PATIENTS).param("name", "Example"),
+                get(PATIENTS + "/").param("name", "Example"),
+                head(PATIENTS).param("name", "Example"),
+                head(PATIENTS + "/").param("name", "Example"),
+                get(demographicsPath),
+                get(demographicsPath + "/"),
+                head(demographicsPath),
+                head(demographicsPath + "/")
+        );
+    }
+
+    private static MockHttpServletRequestBuilder registrationRequest(String path) {
+        return post(path)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"medicalRecordNumber":"P01-001","givenName":"Example"}
+                        """);
     }
 
     @Test

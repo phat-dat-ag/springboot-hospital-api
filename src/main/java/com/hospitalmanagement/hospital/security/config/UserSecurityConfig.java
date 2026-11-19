@@ -76,13 +76,13 @@ public class UserSecurityConfig {
                         HttpMethod.POST,
                         "/api/v1/hospital/patients",
                         "/api/v1/hospital/patients/"
-                ).hasRole("ADMIN")
+                ).hasRole("STAFF")
 
                 .requestMatchers(
                         HttpMethod.GET,
                         "/api/v1/hospital/patients",
                         "/api/v1/hospital/patients/"
-                ).hasRole("ADMIN")
+                ).hasRole("STAFF")
 
                 .requestMatchers(
                         HttpMethod.GET,
@@ -92,6 +92,8 @@ public class UserSecurityConfig {
 
                 .requestMatchers(
                         HttpMethod.HEAD,
+                        "/api/v1/hospital/patients",
+                        "/api/v1/hospital/patients/",
                         "/api/v1/hospital/patients/*",
                         "/api/v1/hospital/patients/*/"
                 ).hasRole("STAFF")

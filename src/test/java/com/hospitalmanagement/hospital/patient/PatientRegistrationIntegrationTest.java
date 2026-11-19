@@ -2,11 +2,16 @@ package com.hospitalmanagement.hospital.patient;
 
 import com.hospitalmanagement.hospital.patient.dto.request.RegisterPatientRequest;
 import com.hospitalmanagement.hospital.patient.service.PatientService;
+import com.hospitalmanagement.hospital.patient.service.impl.PatientServiceImpl;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -34,7 +39,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.core.authority.AuthorityUtils.createAuthorityList;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -139,6 +146,80 @@ class PatientRegistrationIntegrationTest {
     }
 
     @Test
+    void receptionistCanRegisterThenFindAndConfirmTheSameChart() throws Exception {
+        String mrn = mrn("RECEPTION");
+
+        register(mrn, "[]").andExpect(status().isCreated());
+
+        UUID patientId = patientId(mrn);
+
+        var staff = jwt().jwt(token -> token.subject(ACTOR.toString()))
+                .authorities(createAuthorityList("ROLE_STAFF"));
+
+        mvc.perform(get(PATH).param("medicalRecordNumber", mrn).with(staff))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(patientId.toString()));
+
+        mvc.perform(get(PATH + "/" + patientId).with(staff))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.id").value(patientId.toString()))
+                .andExpect(jsonPath("$.data.medicalRecordNumber").value(mrn));
+
+        assertAudit(patientId);
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM medical_record_access_logs
+                WHERE patient_id = ? AND actor_user_id = ?
+                """, Integer.class, patientId, ACTOR)).isEqualTo(2);
+    }
+
+    @Test
+    void logsOnlySafeRegistrationMetadataAndOnlyReportsSuccessForCommittedWrites()
+            throws Exception {
+        var logger = (Logger) LoggerFactory.getLogger(PatientServiceImpl.class);
+        var appender = new ListAppender<ILoggingEvent>();
+
+        appender.start();
+        logger.addAppender(appender);
+
+        String mrn = mrn("SUCCESS-LOG");
+        String failedMrn = mrn("FAIL-AUDIT");
+        String contacts = """
+                [{"contactType":"self","phone":"example-private-phone"}]
+                """;
+
+        try {
+            register(mrn, contacts).andExpect(status().isCreated());
+            register(failedMrn, contacts).andExpect(status().isBadRequest());
+            register(mrn, contacts).andExpect(status().isConflict());
+
+            assertThat(appender.list)
+                    .filteredOn(event -> event.getFormattedMessage()
+                            .equals("Patient registration completed"))
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getKeyValuePairs())
+                            .anySatisfy(pair -> {
+                                assertThat(pair.key).isEqualTo("stage");
+                                assertThat(pair.value).isEqualTo("committed");
+                            }));
+
+            assertThat(appender.list).allSatisfy(event ->
+                    assertThat(event.getFormattedMessage() + event.getKeyValuePairs())
+                            .doesNotContain(
+                                    mrn,
+                                    failedMrn,
+                                    patientId(mrn).toString(),
+                                    ACTOR.toString(),
+                                    "example-private-phone"
+                            ));
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    @Test
     void persistsTwoContactsAndOnlyAuditMetadata() throws Exception {
         String mrn = mrn("CONTACTS");
 
@@ -180,7 +261,7 @@ class PatientRegistrationIntegrationTest {
 
         mvc.perform(post(PATH)
                         .with(jwt().jwt(token -> token.subject(ACTOR.toString()))
-                                .authorities(createAuthorityList("ROLE_ADMIN")))
+                                .authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"medicalRecordNumber":"INVALID","givenName":" ",
@@ -323,7 +404,7 @@ class PatientRegistrationIntegrationTest {
 
         return mvc.perform(post(PATH)
                 .with(jwt().jwt(token -> token.subject(ACTOR.toString()))
-                        .authorities(createAuthorityList("ROLE_ADMIN")))
+                        .authorities(createAuthorityList("ROLE_STAFF")))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }

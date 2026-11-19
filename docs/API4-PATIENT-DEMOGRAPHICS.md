@@ -5,9 +5,7 @@ active chart before staff use the patient's UUID for a clinical workflow.
 Supply a valid User Service bearer token and a patient UUID.
 
 Spring Security authorizes the STAFF role to read active patient
-demographics for registration and administrative work. The current rule
-applies to all active patient records. Existing patient search remains
-ADMIN-only, so staff need a patient UUID from an authorized workflow.
+demographics for registration and administrative work. In the synthetic single-clinic demo, STAFF can use the patient UUID returned by registration or filtered search to open an active chart.
 
 DOCTOR, PATIENT, ADMIN and USER receive `403`. The encounter and doctor
 models store assignments, but Hospital has no doctor-to-chart authorization
@@ -16,9 +14,7 @@ but account linking and patient self-service are not implemented. ADMIN
 and USER have no explicit clinical read permission for PAT-003.
 
 Hospital now interprets the User Service role numbers as USER=1,
-PATIENT=2, STAFF=3, DOCTOR=4 and ADMIN=5. Deploy with the matching User
-Service role contract and obtain fresh access tokens before validating
-existing admin workflows.
+PATIENT=2, STAFF=3, DOCTOR=4 and ADMIN=5. Use an existing activated STAFF account provisioned through User Service.
 
 On success, the standard envelope contains `id`,
 `medicalRecordNumber`, `givenName`, `familyName`, `dateOfBirth`,

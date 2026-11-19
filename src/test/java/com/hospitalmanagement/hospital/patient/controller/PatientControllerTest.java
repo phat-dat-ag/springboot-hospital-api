@@ -85,7 +85,7 @@ class PatientControllerTest {
                         .with(
                                 jwt()
                                         .jwt(token -> token.subject(ACTOR.toString()))
-                                        .authorities(createAuthorityList("ROLE_ADMIN"))
+                                        .authorities(createAuthorityList("ROLE_STAFF"))
                         )
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
@@ -100,7 +100,7 @@ class PatientControllerTest {
     }
 
     @Test
-    void requiresAuthenticationAndAdminIncludingTrailingSlash() throws Exception {
+    void requiresAuthenticationAndStaffIncludingTrailingSlash() throws Exception {
         mvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isUnauthorized());
 
@@ -133,7 +133,7 @@ class PatientControllerTest {
                         .with(
                                 jwt().
                                         jwt(token -> token.subject("not-a-uuid"))
-                                        .authorities(createAuthorityList("ROLE_ADMIN"))
+                                        .authorities(createAuthorityList("ROLE_STAFF"))
                         )
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
@@ -145,7 +145,7 @@ class PatientControllerTest {
     @Test
     void rejectsInvalidRequestWithExplicitValidationMessages() throws Exception {
         mvc.perform(post(PATH)
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"medicalRecordNumber":"LEARN-0001","givenName":" "}
@@ -178,7 +178,7 @@ class PatientControllerTest {
 
         try {
             mvc.perform(post(PATH)
-                            .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                            .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                             .header("X-Correlation-ID", "enum-validation-test")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
@@ -214,7 +214,7 @@ class PatientControllerTest {
     @Test
     void invalidContactEnumIdentifiesTheNestedField() throws Exception {
         mvc.perform(post(PATH)
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"medicalRecordNumber":"LEARN-0001","givenName":"Example",
@@ -231,7 +231,7 @@ class PatientControllerTest {
     @Test
     void malformedJsonRetainsSafeGenericError() throws Exception {
         mvc.perform(post(PATH)
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"medicalRecordNumber\":\"private-value\","))
                 .andExpect(status().isBadRequest())
@@ -249,7 +249,7 @@ class PatientControllerTest {
                         .with(
                                 jwt()
                                         .jwt(token -> token.subject(ACTOR.toString()))
-                                        .authorities(createAuthorityList("ROLE_ADMIN")))
+                                        .authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY)
                 )

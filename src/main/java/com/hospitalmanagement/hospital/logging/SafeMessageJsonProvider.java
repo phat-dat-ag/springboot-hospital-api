@@ -18,6 +18,7 @@ public final class SafeMessageJsonProvider extends MessageJsonProvider {
                 && (
                 name.startsWith("org.springframework.boot.diagnostics.")
                         || name.startsWith("org.apache.coyote.")
+                        || name.equals("org.hibernate.orm.jdbc.error")
                         || name.endsWith("SqlExceptionHelper")
                         || name.endsWith("DefaultHandlerExceptionResolver")
         );
