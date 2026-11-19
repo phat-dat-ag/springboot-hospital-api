@@ -166,7 +166,7 @@ class UserServiceClientTest {
         assertThat(client.getUser(ID).user().id()).isEqualTo(ID);
         assertThatThrownBy(() -> client.getAccountIdentity(ID))
                 .isInstanceOfSatisfying(BusinessException.class, failure ->
-                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR));
+                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE));
     }
 
     @Test
@@ -176,7 +176,47 @@ class UserServiceClientTest {
         assertThat(client.getUser(ID).user().isActivated()).isFalse();
         assertThatThrownBy(() -> client.getAccountIdentity(ID))
                 .isInstanceOfSatisfying(BusinessException.class, failure ->
-                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR));
+                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE));
+    }
+
+    @Test
+    void doesNotCoerceAnActivationStringForEligibility() {
+        body = """
+                {"user":{"id":"%s","isActivated":"true","role":4}}
+                """.formatted(ID);
+
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE);
+    }
+
+    @Test
+    void differentiatesAuthoritativeMissingAccountFromOtherDependencyFailures() {
+        status = 404;
+        body = "{\"code\":\"USER_NOT_FOUND\"}";
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_NOT_FOUND);
+        assertFailure();
+
+        body = "{\"code\":\"RESOURCE_NOT_FOUND\"}";
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE);
+
+        status = 503;
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE);
+
+        status = 200;
+        body = "not-json";
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE);
+    }
+
+    @Test
+    void classifiesEligibilityTimeoutAsUnavailable() {
+        delayMillis = 1000;
+        client = client(Duration.ofMillis(100));
+        assertEligibilityFailure(ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE);
+    }
+
+    private void assertEligibilityFailure(ErrorCode code) {
+        assertThatThrownBy(() -> client.getAccountIdentity(ID))
+                .isInstanceOfSatisfying(BusinessException.class, failure ->
+                        assertThat(failure.getErrorCode()).isEqualTo(code));
     }
 
     @ParameterizedTest

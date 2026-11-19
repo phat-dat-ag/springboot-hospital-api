@@ -50,6 +50,16 @@ public enum ErrorCode {
     ENCOUNTER_START_REQUIRED(HttpStatus.CONFLICT, "Encounter requires a valid start timestamp"),
     ENCOUNTER_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "Cancellation requires a nonblank reason"),
     ENCOUNTER_LOCK_CONFLICT(HttpStatus.CONFLICT, "Encounter is busy; refresh before trying again"),
+    ENCOUNTER_IDEMPOTENCY_CONFLICT(HttpStatus.CONFLICT, "Idempotency key already used"),
+    ENCOUNTER_OPEN_VISIT(HttpStatus.CONFLICT, "An open visit exists for that clinic day"),
+    ENCOUNTER_SCHEDULE_INVALID(HttpStatus.BAD_REQUEST, "Schedule is outside the supported clinic dates"),
+
+    DOCTOR_ACCOUNT_NOT_FOUND(HttpStatus.CONFLICT, "Linked doctor account does not exist"),
+    DOCTOR_ACCOUNT_INACTIVE(HttpStatus.CONFLICT, "Linked doctor account is inactive"),
+    DOCTOR_ACCOUNT_ROLE_INVALID(HttpStatus.CONFLICT, "Linked account does not have the doctor role"),
+    DOCTOR_ACCOUNT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Doctor eligibility service unavailable"),
+    DOCTOR_ACCOUNT_INVALID_RESPONSE(HttpStatus.BAD_GATEWAY, "Doctor eligibility response is invalid"),
+    ENCOUNTER_REGISTRATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to register encounter"),
 
     // Server errors
     ENCOUNTER_CHANGE_FAILED(

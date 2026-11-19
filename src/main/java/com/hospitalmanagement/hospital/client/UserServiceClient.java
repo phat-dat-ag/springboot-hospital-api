@@ -9,6 +9,7 @@ import com.hospitalmanagement.hospital.dto.response.InternalUserResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -35,20 +36,20 @@ public class UserServiceClient {
     }
 
     public InternalUserResponse getUser(UUID uuid) {
-        UserAccount user = lookup(uuid);
+        UserAccount user = lookup(uuid, false);
 
         return new InternalUserResponse(new InternalUserDTO(
                 user.id(),
                 user.username(),
                 user.email(),
-                Boolean.TRUE.equals(user.isActivated()),
+                user.isActivated() != null && user.isActivated().asBoolean(false),
                 user.createdAt(),
                 user.updatedAt()
         ));
     }
 
     public AccountIdentity getAccountIdentity(UUID uuid) {
-        UserAccount user = lookup(uuid);
+        UserAccount user = lookup(uuid, true);
         JsonNode role = user.role();
 
         if (role == null
@@ -57,18 +58,19 @@ public class UserServiceClient {
                 || role.intValue() < 1
                 || role.intValue() > 5
                 || user.isActivated() == null
+                || !user.isActivated().isBoolean()
         ) {
             log.atWarn()
                     .addKeyValue("event", "dependency.user.invalid_identity")
                     .log("User Service returned incomplete or invalid account identity");
 
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE);
         }
 
-        return new AccountIdentity(user.id(), user.isActivated(), role.intValue());
+        return new AccountIdentity(user.id(), user.isActivated().asBoolean(), role.intValue());
     }
 
-    private UserAccount lookup(UUID uuid) {
+    private UserAccount lookup(UUID uuid, boolean forEligibility) {
         UserLookupResponse response;
 
         try {
@@ -84,7 +86,8 @@ public class UserServiceClient {
                     .addKeyValue("upstream.status", ex.getStatusCode().value())
                     .log("User Service request failed");
 
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(forEligibility
+                    ? accountLookupError(ex) : ErrorCode.INTERNAL_SERVER_ERROR);
         } catch (RestClientException ex) {
             log.atWarn()
                     .addKeyValue("event", "dependency.user.failed")
@@ -93,7 +96,10 @@ public class UserServiceClient {
                             ex.getClass().getSimpleName()
                     ).log("User Service request failed");
 
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            ErrorCode error = ex instanceof ResourceAccessException
+                    ? ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE
+                    : ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE;
+            throw new BusinessException(forEligibility ? error : ErrorCode.INTERNAL_SERVER_ERROR);
         }
         if (response == null
                 || response.user() == null
@@ -103,10 +109,29 @@ public class UserServiceClient {
                     .addKeyValue("event", "dependency.user.invalid_response")
                     .log("User Service returned an invalid user response");
 
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(forEligibility
+                    ? ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE : ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
         return response.user();
+    }
+
+    private ErrorCode accountLookupError(RestClientResponseException exception) {
+        if (exception.getStatusCode().value() == 404) {
+            try {
+                JsonNode body = exception.getResponseBodyAs(JsonNode.class);
+
+                if (body != null && "USER_NOT_FOUND".equals(body.path("code").asString())) {
+                    return ErrorCode.DOCTOR_ACCOUNT_NOT_FOUND;
+                }
+            } catch (RuntimeException unreadable) {
+                return ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE;
+            }
+
+            return ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE;
+        }
+
+        return ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE;
     }
 
     public record AccountIdentity(UUID id, boolean isActivated, int role) {
@@ -119,7 +144,7 @@ public class UserServiceClient {
             UUID id,
             String username,
             String email,
-            Boolean isActivated,
+            JsonNode isActivated,
             LocalDateTime createdAt,
             LocalDateTime updatedAt,
             JsonNode role

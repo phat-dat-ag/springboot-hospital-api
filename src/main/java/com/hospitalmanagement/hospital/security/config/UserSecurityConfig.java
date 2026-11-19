@@ -99,6 +99,24 @@ public class UserSecurityConfig {
                 ).hasRole("STAFF")
 
                 .requestMatchers(
+                        HttpMethod.GET,
+                        "/api/v1/hospital/doctors",
+                        "/api/v1/hospital/doctors/"
+                ).hasRole("STAFF")
+
+                .requestMatchers(
+                        HttpMethod.HEAD,
+                        "/api/v1/hospital/doctors",
+                        "/api/v1/hospital/doctors/"
+                ).hasRole("STAFF")
+
+                .requestMatchers(
+                        HttpMethod.POST,
+                        "/api/v1/hospital/encounters",
+                        "/api/v1/hospital/encounters/"
+                ).hasRole("STAFF")
+
+                .requestMatchers(
                         HttpMethod.PATCH,
                         "/api/v1/hospital/encounters/*/status",
                         "/api/v1/hospital/encounters/*/status/"

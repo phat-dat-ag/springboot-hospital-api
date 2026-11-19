@@ -1,5 +1,8 @@
 package com.hospitalmanagement.hospital.controller;
 
+import com.hospitalmanagement.hospital.encounter.doctor.DoctorCandidates;
+import com.hospitalmanagement.hospital.encounter.registration.EncounterRegistrationService;
+import com.hospitalmanagement.hospital.encounter.registration.EncounterRegistrationStore;
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
 import com.hospitalmanagement.hospital.patient.service.PatientDemographicsService;
 import com.hospitalmanagement.hospital.patient.service.PatientSearchService;
@@ -24,6 +27,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration",
         "management.endpoint.health.probes.enabled=true"
+})
+@MockitoBean(types = {
+        DoctorCandidates.class,
+        EncounterRegistrationService.class,
+        EncounterRegistrationStore.class
 })
 @AutoConfigureMockMvc
 class HospitalFoundationTest {
