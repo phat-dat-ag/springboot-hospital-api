@@ -27,6 +27,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.sql.Connection;
 import java.sql.Timestamp;
@@ -49,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.core.authority.AuthorityUtils.createAuthorityList;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -129,7 +133,9 @@ class EncounterStatusIntegrationTest {
                     IF (TG_TABLE_NAME = 'encounter_status_histories'
                         AND NEW.actor_user_id = '00000000-0000-0000-0000-00000000e001'::uuid)
                         OR (TG_TABLE_NAME = 'clinical_audit_logs'
-                        AND NEW.actor_user_id = '00000000-0000-0000-0000-00000000e002'::uuid)
+                        AND NEW.actor_user_id IN (
+                            '00000000-0000-0000-0000-00000000e002'::uuid,
+                            '00000000-0000-0000-0000-00000000e004'::uuid))
                     THEN
                         RAISE EXCEPTION 'Injected encounter event failure' USING ERRCODE = '23514';
                     END IF;
@@ -485,6 +491,197 @@ class EncounterStatusIntegrationTest {
     private void schedule(Fixture fixture, Instant scheduledAt) {
         jdbc.update("UPDATE medical_encounters SET scheduled_at = ? WHERE id = ?",
                 Timestamp.from(scheduledAt), fixture.encounter());
+    }
+
+    @Test
+    void assignedDoctorRecordsAndReadsAuditedVitalMeasurements() throws Exception {
+        Fixture active = fixture("in_progress", true);
+        Fixture other = fixture("in_progress", true);
+
+        String path = clinicalPath(active) + "/vitals";
+        String body = "{\"measurements\":{\"heartRateBpm\":72,\"oxygenSaturationPct\":98}}";
+
+        mvc.perform(post(path).with(doctor(other))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                )
+                .andExpect(status().isNotFound());
+        mvc.perform(post(path).with(doctor(active))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"measurements\":{}}")
+                )
+                .andExpect(status().isBadRequest());
+        mvc.perform(post(path).with(doctor(active))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"measurements\":{\"oxygenSaturationPct\":101}}")
+                )
+                .andExpect(status().isBadRequest());
+        mvc.perform(post(path).with(doctor(active))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.measurements.heartRateBpm").value(72))
+                .andExpect(jsonPath("$.data.measuredAt").value(NOW.toString()));
+        mvc.perform(get(path).with(doctor(active)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.items.length()").value(1));
+        assertThat(jdbc.queryForObject("""
+                SELECT recorded_by_user_id FROM vital_signs WHERE encounter_id = ?
+                """, UUID.class, active.encounter())).isEqualTo(active.actor());
+        assertThat(count("clinical_audit_logs", "actor_user_id", active.actor())).isEqualTo(1);
+        assertThat(count("medical_record_access_logs", "actor_user_id", active.actor()))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void signsOnlyTheReviewedDraftAndKeepsTheSignedContentImmutable() throws Exception {
+        Fixture fixture = fixture("in_progress", true);
+        String base = clinicalPath(fixture) + "/notes";
+
+        var initial = createDraft(fixture);
+
+        String id = initial.path("id").asString();
+        String firstRevision = initial.path("revision").asString();
+        String note = base + "/" + id;
+
+        mvc.perform(get(base).with(doctor(fixture)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].content").doesNotExist());
+        mvc.perform(get(note).with(doctor(fixture)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.revision").value(firstRevision));
+        var edited = mvc.perform(patch(note).with(doctor(fixture))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Revised synthetic text","expectedRevision":"%s"}
+                                """.formatted(firstRevision)))
+                .andExpect(status().isOk()).andReturn().getResponse();
+        String latestRevision = new JsonMapper()
+                .readTree(edited.getContentAsByteArray()).path("data").path("revision").asString();
+
+        mvc.perform(post(note + "/signature").with(doctor(fixture))
+                        .contentType(MediaType.APPLICATION_JSON).content(signature(firstRevision)))
+                .andExpect(status().isConflict());
+        mvc.perform(post(note + "/signature").with(doctor(fixture))
+                        .contentType(MediaType.APPLICATION_JSON).content(signature(latestRevision)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").value("Revised synthetic text"))
+                .andExpect(jsonPath("$.data.status").value("signed"))
+                .andExpect(jsonPath("$.data.signedAt").exists());
+        mvc.perform(patch(note).with(doctor(fixture)).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Replacement","expectedRevision":"%s"}
+                                """.formatted(latestRevision)))
+                .andExpect(status().isConflict());
+        assertThat(jdbc.queryForList("""
+                SELECT operation FROM clinical_audit_logs
+                WHERE entity_id = ? AND actor_user_id = ?
+                """, String.class, UUID.fromString(id), fixture.actor()))
+                .containsExactlyInAnyOrder("create", "update", "sign");
+    }
+
+    @Test
+    void clinicalRoutesDenyOtherRolesAndClosedEncounterWrites() throws Exception {
+        Fixture arrived = fixture("arrived", true);
+        String path = clinicalPath(arrived) + "/notes";
+        String body = "{\"content\":\"Synthetic draft\"}";
+
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+
+        for (String role : List.of("ROLE_USER", "ROLE_PATIENT", "ROLE_STAFF", "ROLE_ADMIN")) {
+            mvc.perform(get(path).with(jwt().authorities(createAuthorityList(role))))
+                    .andExpect(status().isForbidden());
+            mvc.perform(post(path).with(jwt().authorities(createAuthorityList(role)))
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isForbidden());
+        }
+
+        mvc.perform(post(path).with(doctor(arrived))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CLINICAL_ENCOUNTER_NOT_IN_PROGRESS"));
+    }
+
+    @Test
+    void rollsBackClinicalWriteIfItsAuditFails() throws Exception {
+        Fixture fixture = fixture(
+                "in_progress",
+                true,
+                UUID.fromString("00000000-0000-0000-0000-00000000e004")
+        );
+        mvc.perform(post(clinicalPath(fixture) + "/notes").with(doctor(fixture))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"Synthetic draft\"}"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("CLINICAL_DOCUMENTATION_FAILED"));
+        assertThat(count("clinical_notes", "encounter_id", fixture.encounter())).isZero();
+    }
+
+    @Test
+    void concurrentDraftEditAndSignatureCommitOnlyOneReviewedRevision() throws Exception {
+        Fixture fixture = fixture("in_progress", true);
+
+        JsonNode draft = createDraft(fixture);
+
+        String path = clinicalPath(fixture) + "/notes/" + draft.path("id").asString();
+        String revision = draft.path("revision").asString();
+
+        var start = new CountDownLatch(1);
+        var threads = Executors.newFixedThreadPool(2);
+
+        try {
+            var signature = threads.submit(() -> {
+                start.await();
+                return mvc.perform(post(path + "/signature").with(doctor(fixture))
+                                .contentType(MediaType.APPLICATION_JSON).content(signature(revision)))
+                        .andReturn().getResponse().getStatus();
+            });
+            var edit = threads.submit(() -> {
+                start.await();
+                return mvc.perform(patch(path).with(doctor(fixture))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {"content":"Concurrent edit","expectedRevision":"%s"}
+                                        """.formatted(revision)))
+                        .andReturn().getResponse().getStatus();
+            });
+            start.countDown();
+
+            assertThat(List.of(
+                    signature.get(10, TimeUnit.SECONDS),
+                    edit.get(10, TimeUnit.SECONDS)
+            ))
+                    .containsExactlyInAnyOrder(200, 409);
+        } finally {
+            threads.shutdownNow();
+        }
+
+        assertThat(count("clinical_audit_logs", "actor_user_id", fixture.actor())).isEqualTo(2);
+    }
+
+    private JsonNode createDraft(Fixture fixture) throws Exception {
+        var result = mvc.perform(post(clinicalPath(fixture) + "/notes").with(doctor(fixture))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"Synthetic draft\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse();
+
+        return new JsonMapper()
+                .readTree(result.getContentAsByteArray()).path("data");
+    }
+
+    private static String signature(String revision) {
+        return "{\"expectedRevision\":\"%s\"}".formatted(revision);
+    }
+
+    private static String clinicalPath(Fixture fixture) {
+        return "/api/v1/hospital/encounters/" + fixture.encounter();
+    }
+
+    private static RequestPostProcessor doctor(Fixture fixture) {
+        return jwt().jwt(token -> token.subject(fixture.actor().toString()))
+                .authorities(createAuthorityList("ROLE_DOCTOR"));
     }
 
     @Test

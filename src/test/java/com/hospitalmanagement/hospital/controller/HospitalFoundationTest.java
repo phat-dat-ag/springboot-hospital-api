@@ -1,5 +1,7 @@
 package com.hospitalmanagement.hospital.controller;
 
+import com.hospitalmanagement.hospital.encounter.clinical.ClinicalDocumentationRepository;
+import com.hospitalmanagement.hospital.encounter.clinical.ClinicalDocumentationService;
 import com.hospitalmanagement.hospital.encounter.doctor.DoctorCandidates;
 import com.hospitalmanagement.hospital.encounter.read.EncounterReadRepository;
 import com.hospitalmanagement.hospital.encounter.read.EncounterReadService;
@@ -32,6 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "management.endpoint.health.probes.enabled=true"
 })
 @MockitoBean(types = {
+        ClinicalDocumentationRepository.class,
+        ClinicalDocumentationService.class,
         DoctorCandidates.class,
         EncounterRegistrationService.class,
         EncounterRegistrationStore.class,

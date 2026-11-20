@@ -43,6 +43,10 @@ public enum ErrorCode {
     ),
 
     ENCOUNTER_NOT_FOUND(HttpStatus.NOT_FOUND, "Encounter not found"),
+    CLINICAL_NOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "Clinical note not found"),
+    CLINICAL_NOTE_CONFLICT(HttpStatus.CONFLICT, "The note is no longer the requested draft"),
+    CLINICAL_ENCOUNTER_NOT_IN_PROGRESS(HttpStatus.CONFLICT, "Examination is not in progress"),
+    CLINICAL_DOCUMENTATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "Clinical documentation could not be recorded"),
     ENCOUNTER_ACCESS_DENIED(HttpStatus.FORBIDDEN, "Encounter action is not authorized"),
     ENCOUNTER_STATUS_CONFLICT(HttpStatus.CONFLICT, "Encounter status has changed; refresh the visit"),
     ENCOUNTER_TRANSITION_NOT_ALLOWED(HttpStatus.CONFLICT, "Encounter transition is not allowed"),
