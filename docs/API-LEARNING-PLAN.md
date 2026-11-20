@@ -47,10 +47,10 @@ The guide itself does not execute migrations or start services.
    docker compose logs clinical-database-init flyway-postgres
    ```
 
-8. Confirm migration V9 succeeded. Sign in through User Service with an existing activated STAFF account for the patient APIs. Use an existing ADMIN account for the encounter learning API. Keep both tokens in local client secret variables.
+8. Confirm all Hospital migrations through V10 succeeded. Sign in through User Service with an existing activated STAFF account for the patient APIs. Use STAFF for reception and the assigned DOCTOR account for examination start. Keep tokens in local client secret variables.
 9. Verify the STAFF token with a filtered patient search. The existing technical authentication endpoint remains available to USER and ADMIN.
 
-**Security for this learning slice.** Patient registration, search and limited demographics require STAFF. The existing encounter status endpoint requires ADMIN. The current User Service role contract
+**Security for this learning slice.** Patient registration, search and limited demographics require STAFF. Encounter status authorization depends on the requested action and current doctor assignment. The current User Service role contract
 uses USER=`1`, PATIENT=`2`, STAFF=`3`, DOCTOR=`4` and ADMIN=`5`.
 [PAT-003](API4-PATIENT-DEMOGRAPHICS.md) uses the STAFF role for demographic
 lookup. Audit actor UUIDs come from the validated JWT
@@ -383,7 +383,7 @@ For this bounded exercise implement only these transitions:
 | scheduled | cancelled | Nonblank cancellation reason |
 | arrived | in_progress | Assigned active doctor; set started_at |
 | arrived | cancelled | Nonblank cancellation reason |
-| in_progress | completed | started_at present and doctor assigned; set ended_at |
+| in_progress | none in P03 | Completion is deferred to P05 |
 | completed, cancelled, entered_in_error | none in this exercise | Return 409 for attempted changes |
 
 Return **404** for an unknown encounter and **409** for an expectedStatus
@@ -417,12 +417,12 @@ Do not relax the database immutability trigger to accommodate a generic PATCH.
    Lock patient/doctor rows consistently if their active flags must remain stable
    during this write. Keep a fixed lock order across future workflows.
 6. Validate the transition, set only its allowed fields and use a single Clock
-   instant for the change. arrived → in_progress sets startedAt; completion
-   sets endedAt without changing startedAt. Populate cancellation_reason for
+   instant for the change. Arrival is recorded in status history. Starting the
+   examination sets startedAt. Populate cancellation_reason for
    cancellation. Existing DB CHECKs are the last integrity boundary.
 7. In the SAME transaction append one history row with from/to status, actor,
    reason and event instant, plus one clinical audit row. Use audit operation
-   `update` for arrival/start/completion and `cancel` for cancellation; do not
+   `update` for arrival and start, and `cancel` for cancellation. Do not
    invent unsupported audit operations such as `complete`.
 8. Flush, refresh the trigger-maintained updatedAt and return a response DTO.
    Never update or delete existing histories. History and audit inserts must
@@ -431,7 +431,7 @@ Do not relax the database immutability trigger to accommodate a generic PATCH.
    keep transactions short and configure a bounded lock wait. Do not silently
    retry a clinical state change. Ordinary sequential invalid transitions should
    be rejected by the service before SQL errors occur.
-10. Add the controller, ADMIN route rule and OpenAPI lifecycle/error examples.
+10. Use the existing controller, STAFF/DOCTOR route admission, action authorization and OpenAPI lifecycle examples.
 11. Run two simultaneous requests using different connections/transactions.
     A test with two calls sharing one transaction does not prove concurrency.
 
@@ -441,7 +441,7 @@ clinical rules are a later feature, not an implied production discharge policy.
 
 ### Acceptance tests
 
-- [x] scheduled → arrived → in_progress → completed succeeds in order.
+- [x] scheduled → arrived → in_progress succeeds for the appropriate actors. Completion is blocked.
 - [x] Each successful request adds exactly one matching history and audit row.
 - [x] started_at/ended_at are set correctly; created_at is preserved.
 - [x] Unknown encounter: 404; malformed UUID/state: 400.

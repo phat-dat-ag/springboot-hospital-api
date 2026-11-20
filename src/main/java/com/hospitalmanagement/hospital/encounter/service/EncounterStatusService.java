@@ -5,6 +5,7 @@ import com.hospitalmanagement.hospital.encounter.dto.response.EncounterStatusRes
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.util.UUID;
 
@@ -17,6 +18,6 @@ public interface EncounterStatusService {
             @Valid
             ChangeEncounterStatusRequest request,
 
-            String authenticatedSubject
+            JwtAuthenticationToken authentication
     );
 }

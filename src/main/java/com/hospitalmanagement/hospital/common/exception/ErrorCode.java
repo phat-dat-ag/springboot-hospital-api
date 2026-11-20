@@ -43,6 +43,7 @@ public enum ErrorCode {
     ),
 
     ENCOUNTER_NOT_FOUND(HttpStatus.NOT_FOUND, "Encounter not found"),
+    ENCOUNTER_ACCESS_DENIED(HttpStatus.FORBIDDEN, "Encounter action is not authorized"),
     ENCOUNTER_STATUS_CONFLICT(HttpStatus.CONFLICT, "Encounter status has changed; refresh the visit"),
     ENCOUNTER_TRANSITION_NOT_ALLOWED(HttpStatus.CONFLICT, "Encounter transition is not allowed"),
     ENCOUNTER_PATIENT_INACTIVE(HttpStatus.CONFLICT, "Encounter patient is inactive"),
