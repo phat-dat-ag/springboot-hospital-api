@@ -1,5 +1,7 @@
 package com.hospitalmanagement.hospital.security.jwt.user;
 
+import com.hospitalmanagement.hospital.encounter.clinical.ClinicalDocumentationRepository;
+import com.hospitalmanagement.hospital.encounter.clinical.ClinicalDocumentationService;
 import com.hospitalmanagement.hospital.encounter.doctor.DoctorCandidates;
 import com.hospitalmanagement.hospital.encounter.read.EncounterReadRepository;
 import com.hospitalmanagement.hospital.encounter.read.EncounterReadService;
@@ -57,6 +59,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration"
 )
 @MockitoBean(types = {
+        ClinicalDocumentationRepository.class,
+        ClinicalDocumentationService.class,
         DoctorCandidates.class,
         EncounterRegistrationService.class,
         EncounterRegistrationStore.class,

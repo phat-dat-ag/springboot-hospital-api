@@ -159,6 +159,13 @@ public class UserSecurityConfig {
                 ).hasAnyRole("STAFF", "DOCTOR")
 
                 .requestMatchers(
+                        "/api/v1/hospital/encounters/*/vitals",
+                        "/api/v1/hospital/encounters/*/vitals/",
+                        "/api/v1/hospital/encounters/*/notes",
+                        "/api/v1/hospital/encounters/*/notes/**"
+                ).hasRole("DOCTOR")
+
+                .requestMatchers(
                         "/api/v1/hospital/**"
                 ).hasAnyRole("USER", "ADMIN")
                 .anyRequest().authenticated());
