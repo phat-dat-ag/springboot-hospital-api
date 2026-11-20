@@ -166,7 +166,11 @@ public class UserSecurityConfig {
                         "/api/v1/hospital/diagnosis-codes",
                         "/api/v1/hospital/diagnosis-codes/",
                         "/api/v1/hospital/encounters/*/diagnoses",
-                        "/api/v1/hospital/encounters/*/diagnoses/"
+                        "/api/v1/hospital/encounters/*/diagnoses/",
+                        "/api/v1/hospital/patients/*/encounters",
+                        "/api/v1/hospital/patients/*/encounters/",
+                        "/api/v1/hospital/encounters/*/status-history",
+                        "/api/v1/hospital/encounters/*/status-history/"
                 ).hasRole("DOCTOR")
 
                 .requestMatchers(

@@ -62,7 +62,8 @@ from the persisted note ID, update instant, status and content.
 A stale revision, attempted edit of a signed note, repeated signature, or
 write to an encounter outside IN_PROGRESS returns 409. A caller cannot edit
 or sign a different doctor's draft. Drafts are visible only to their author
-while assigned. Signed notes are visible to the assigned doctor. Notes
+while assigned to an encounter that has yet to be completed. Completed
+encounter reads expose signed notes only to the assigned doctor. Notes
 entered in error are excluded. PostgreSQL's existing trigger protects signed
 content. To keep the revision check atomic, writes lock the encounter, patient,
 doctor and target note where applicable. Edit and sign cannot both succeed
