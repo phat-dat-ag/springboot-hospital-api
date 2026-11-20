@@ -20,6 +20,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -62,14 +63,14 @@ class EncounterControllerTest {
 
         Instant updated = Instant.parse("2026-11-18T00:00:00Z");
 
-        given(encounters.changeStatus(eq(ID), any(), eq(ACTOR)))
+        given(encounters.changeStatus(eq(ID), any(), any()))
                 .willReturn(new EncounterStatusResponse(
                         ID, patient, EncounterStatus.ARRIVED, null, null, updated
                 ));
 
         mvc.perform(patch(PATH)
                         .with(jwt().jwt(token -> token.subject(ACTOR))
-                                .authorities(createAuthorityList("ROLE_ADMIN"))
+                                .authorities(createAuthorityList("ROLE_STAFF"))
                         )
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
@@ -82,7 +83,9 @@ class EncounterControllerTest {
 
         var request = ArgumentCaptor.forClass(ChangeEncounterStatusRequest.class);
 
-        verify(encounters).changeStatus(eq(ID), request.capture(), eq(ACTOR));
+        var principal = ArgumentCaptor.forClass(JwtAuthenticationToken.class);
+        verify(encounters).changeStatus(eq(ID), request.capture(), principal.capture());
+        assertThat(principal.getValue().getToken().getSubject()).isEqualTo(ACTOR);
 
         assertThat(request.getValue().expectedStatus()).isEqualTo(EncounterStatus.SCHEDULED);
         assertThat(request.getValue().status()).isEqualTo(EncounterStatus.ARRIVED);
@@ -99,7 +102,7 @@ class EncounterControllerTest {
     })
     void rejectsMalformedAndMissingStates(String body) throws Exception {
         mvc.perform(patch(PATH)
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body)
                 )
@@ -111,12 +114,12 @@ class EncounterControllerTest {
     @Test
     void rejectsMalformedUuidAndOverlongReason() throws Exception {
         mvc.perform(patch("/api/v1/hospital/encounters/not-a-uuid/status")
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
                 .andExpect(status().isBadRequest());
         mvc.perform(patch(PATH)
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedStatus\":\"scheduled\",\"status\":\"cancelled\","
                                 + "\"reason\":\"" + "x".repeat(1001) + "\"}"))
@@ -126,13 +129,13 @@ class EncounterControllerTest {
     }
 
     @Test
-    void requiresAdminForCanonicalAndTrailingSlashRoutes() throws Exception {
+    void rejectsLegacyAdminForCanonicalAndTrailingSlashRoutes() throws Exception {
         mvc.perform(patch(PATH).contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isUnauthorized());
 
         for (String path : new String[]{PATH, PATH + "/"}) {
             mvc.perform(patch(path)
-                            .with(jwt().authorities(createAuthorityList("ROLE_USER")))
+                            .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(BODY))
                     .andExpect(status().isForbidden());
@@ -157,7 +160,7 @@ class EncounterControllerTest {
                 .willThrow(new BusinessException(error));
 
         mvc.perform(patch(PATH)
-                        .with(jwt().authorities(createAuthorityList("ROLE_ADMIN")))
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY)
                 )

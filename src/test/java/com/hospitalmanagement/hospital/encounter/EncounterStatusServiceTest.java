@@ -2,6 +2,9 @@ package com.hospitalmanagement.hospital.encounter;
 
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
+import com.hospitalmanagement.hospital.client.UserServiceClient;
+import com.hospitalmanagement.hospital.encounter.doctor.DoctorEligibility;
+import com.hospitalmanagement.hospital.encounter.service.EncounterAccess;
 import com.hospitalmanagement.hospital.encounter.dto.request.ChangeEncounterStatusRequest;
 import com.hospitalmanagement.hospital.encounter.entity.Doctor;
 import com.hospitalmanagement.hospital.encounter.entity.EncounterStatusHistory;
@@ -41,6 +44,7 @@ import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.hospitalmanagement.hospital.encounter.EncounterTestAuthentication.authentication;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -66,9 +70,11 @@ class EncounterStatusServiceTest {
     private final MedicalEncounter encounter = mock(MedicalEncounter.class);
     private final Patient patient = mock(Patient.class);
     private final Doctor doctor = mock(Doctor.class);
+    private final EncounterAccess access = mock(EncounterAccess.class);
+    private final DoctorEligibility eligibility = new DoctorEligibility(mock(UserServiceClient.class));
     private final EncounterStatusServiceImpl service = new EncounterStatusServiceImpl(
             encounters, patients, doctors, histories, audits, entityManager,
-            Clock.fixed(NOW, ZoneId.of("Asia/Bangkok"))
+            Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh")), access, eligibility
     );
 
     @BeforeEach
@@ -83,6 +89,8 @@ class EncounterStatusServiceTest {
         given(patients.findByIdForUpdate(PATIENT)).willReturn(Optional.of(patient));
         given(encounter.getDoctor()).willReturn(doctor);
         given(doctor.getId()).willReturn(DOCTOR);
+        given(doctor.getExternalUserId()).willReturn(UUID.fromString(ACTOR));
+        given(access.requireActiveDoctor(UUID.fromString(ACTOR))).willReturn(DOCTOR);
         given(doctors.findByIdForUpdate(DOCTOR)).willReturn(Optional.of(doctor));
     }
 
@@ -114,7 +122,7 @@ class EncounterStatusServiceTest {
                             EncounterStatus.IN_PROGRESS,
                             "private reason"
                     ),
-                    ACTOR
+                    authentication(ACTOR, "ROLE_DOCTOR")
             );
 
             assertThat(appender.list).hasSize(6);
@@ -173,7 +181,7 @@ class EncounterStatusServiceTest {
     void rejectsActorWithoutTouchingDatabase() {
         assertError(
                 ErrorCode.INVALID_ACTOR_ID,
-                () -> service.changeStatus(ID, start(), "private-invalid-subject")
+                () -> service.changeStatus(ID, start(), authentication("private-invalid-subject", "ROLE_DOCTOR"))
         );
 
         verifyNoInteractions(encounters, patients, doctors, histories, audits, entityManager);
@@ -186,7 +194,7 @@ class EncounterStatusServiceTest {
                 new ChangeEncounterStatusRequest(
                         EncounterStatus.ARRIVED, EncounterStatus.CANCELLED, " \t "
                 ),
-                ACTOR
+                authentication(ACTOR, "ROLE_STAFF")
         ));
         verifyNoInteractions(encounters, histories, audits);
     }
@@ -197,7 +205,7 @@ class EncounterStatusServiceTest {
 
         assertError(
                 ErrorCode.ENCOUNTER_NOT_FOUND,
-                () -> service.changeStatus(ID, start(), ACTOR)
+                () -> service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"))
         );
     }
 
@@ -207,10 +215,10 @@ class EncounterStatusServiceTest {
 
         assertError(
                 ErrorCode.ENCOUNTER_STATUS_CONFLICT,
-                () -> service.changeStatus(ID, start(), ACTOR)
+                () -> service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"))
         );
 
-        verifyNoInteractions(patients, doctors, histories, audits);
+        verifyNoInteractions(histories, audits);
     }
 
     @Test
@@ -219,7 +227,7 @@ class EncounterStatusServiceTest {
 
         assertError(
                 ErrorCode.ENCOUNTER_PATIENT_INACTIVE,
-                () -> service.changeStatus(ID, start(), ACTOR)
+                () -> service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"))
         );
 
         verifyNoInteractions(doctors, histories, audits);
@@ -230,8 +238,8 @@ class EncounterStatusServiceTest {
         given(encounter.getDoctor()).willReturn(null);
 
         assertError(
-                ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE,
-                () -> service.changeStatus(ID, start(), ACTOR)
+                ErrorCode.ENCOUNTER_NOT_FOUND,
+                () -> service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"))
         );
     }
 
@@ -240,8 +248,8 @@ class EncounterStatusServiceTest {
         given(doctor.getDeletedAt()).willReturn(NOW);
 
         assertError(
-                ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE,
-                () -> service.changeStatus(ID, start(), ACTOR)
+                ErrorCode.ENCOUNTER_NOT_FOUND,
+                () -> service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"))
         );
     }
 
@@ -251,7 +259,7 @@ class EncounterStatusServiceTest {
 
         assertError(
                 ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE,
-                () -> service.changeStatus(ID, start(), ACTOR)
+                () -> service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"))
         );
 
         verifyNoInteractions(histories, audits);
@@ -261,7 +269,7 @@ class EncounterStatusServiceTest {
     void acceptsLicenseExpiringTodayAndSharesOneEventInstant() {
         given(doctor.getLicenseExpiresOn()).willReturn(LocalDate.of(2026, 11, 19));
 
-        service.changeStatus(ID, start(), ACTOR);
+        service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"));
 
         verify(encounter).changeStatus(EncounterStatus.IN_PROGRESS, null, NOW);
 
@@ -281,13 +289,13 @@ class EncounterStatusServiceTest {
 
     @Test
     void missingExpiryMeansUnspecifiedAndIsAccepted() {
-        service.changeStatus(ID, start(), ACTOR);
+        service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"));
 
         verify(histories).save(any(EncounterStatusHistory.class));
     }
 
     @Test
-    void rejectsCompletionWithoutStartAndWithFutureStart() {
+    void blocksCompletionForAdmittedRolesAndAdmin() {
         given(encounter.getStatus()).willReturn(EncounterStatus.IN_PROGRESS);
 
         var complete = new ChangeEncounterStatusRequest(
@@ -295,15 +303,17 @@ class EncounterStatusServiceTest {
         );
 
         assertError(
-                ErrorCode.ENCOUNTER_START_REQUIRED,
-                () -> service.changeStatus(ID, complete, ACTOR)
+                ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED,
+                () -> service.changeStatus(ID, complete, authentication(ACTOR, "ROLE_DOCTOR"))
         );
 
-        given(encounter.getStartedAt()).willReturn(NOW.plusSeconds(1));
+        assertError(ErrorCode.ENCOUNTER_ACCESS_DENIED, () -> service.changeStatus(
+                ID, complete, authentication(ACTOR, "ROLE_ADMIN")
+        ));
 
         assertError(
-                ErrorCode.ENCOUNTER_START_REQUIRED,
-                () -> service.changeStatus(ID, complete, ACTOR)
+                ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED,
+                () -> service.changeStatus(ID, complete, authentication(ACTOR, "ROLE_DOCTOR"))
         );
 
         verifyNoInteractions(histories, audits);
@@ -316,7 +326,7 @@ class EncounterStatusServiceTest {
 
         assertError(
                 ErrorCode.ENCOUNTER_LOCK_CONFLICT,
-                () -> service.changeStatus(ID, start(), ACTOR)
+                () -> service.changeStatus(ID, start(), authentication(ACTOR, "ROLE_DOCTOR"))
         );
 
         verify(encounters).findByIdForUpdate(ID);

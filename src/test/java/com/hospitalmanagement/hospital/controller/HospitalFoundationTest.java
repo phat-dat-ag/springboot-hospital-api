@@ -1,7 +1,10 @@
 package com.hospitalmanagement.hospital.controller;
 
 import com.hospitalmanagement.hospital.encounter.doctor.DoctorCandidates;
+import com.hospitalmanagement.hospital.encounter.read.EncounterReadRepository;
+import com.hospitalmanagement.hospital.encounter.read.EncounterReadService;
 import com.hospitalmanagement.hospital.encounter.registration.EncounterRegistrationService;
+import com.hospitalmanagement.hospital.encounter.service.EncounterAccess;
 import com.hospitalmanagement.hospital.encounter.registration.EncounterRegistrationStore;
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
 import com.hospitalmanagement.hospital.patient.service.PatientDemographicsService;
@@ -31,7 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @MockitoBean(types = {
         DoctorCandidates.class,
         EncounterRegistrationService.class,
-        EncounterRegistrationStore.class
+        EncounterRegistrationStore.class,
+        EncounterReadRepository.class, EncounterReadService.class, EncounterAccess.class
 })
 @AutoConfigureMockMvc
 class HospitalFoundationTest {

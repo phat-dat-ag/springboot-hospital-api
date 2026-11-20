@@ -2,6 +2,7 @@ package com.hospitalmanagement.hospital.encounter.entity;
 
 import com.hospitalmanagement.hospital.common.entity.TimestampedEntity;
 import com.hospitalmanagement.hospital.encounter.enums.EncounterStatus;
+import com.hospitalmanagement.hospital.encounter.service.EncounterTransitions;
 import com.hospitalmanagement.hospital.patient.entity.Patient;
 
 import lombok.AccessLevel;
@@ -17,10 +18,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+
 import java.time.Instant;
 import java.util.UUID;
 
-/** Existing encounters are provisioned outside this bounded status workflow. */
 @Entity
 @Table(name = "medical_encounters", schema = "public")
 @Getter
@@ -52,14 +53,14 @@ public class MedicalEncounter extends TimestampedEntity {
     private String cancellationReason;
 
     public void changeStatus(EncounterStatus target, String reason, Instant instant) {
+        if (!EncounterTransitions.allows(status, target)) {
+            throw new IllegalArgumentException("Unsupported encounter transition");
+        }
+
         status = target;
 
         if (target == EncounterStatus.IN_PROGRESS) {
             startedAt = instant;
-        }
-
-        if (target == EncounterStatus.COMPLETED) {
-            endedAt = instant;
         }
 
         if (target == EncounterStatus.CANCELLED) {

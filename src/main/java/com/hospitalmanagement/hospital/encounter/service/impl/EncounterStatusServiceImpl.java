@@ -2,6 +2,7 @@ package com.hospitalmanagement.hospital.encounter.service.impl;
 
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
+import com.hospitalmanagement.hospital.encounter.doctor.DoctorEligibility;
 import com.hospitalmanagement.hospital.encounter.dto.request.ChangeEncounterStatusRequest;
 import com.hospitalmanagement.hospital.encounter.dto.response.EncounterStatusResponse;
 import com.hospitalmanagement.hospital.encounter.entity.Doctor;
@@ -12,6 +13,7 @@ import com.hospitalmanagement.hospital.encounter.repository.DoctorRepository;
 import com.hospitalmanagement.hospital.encounter.repository.EncounterStatusHistoryRepository;
 import com.hospitalmanagement.hospital.encounter.repository.MedicalEncounterRepository;
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
+import com.hospitalmanagement.hospital.encounter.service.EncounterAccess;
 import com.hospitalmanagement.hospital.encounter.service.EncounterTransitions;
 import com.hospitalmanagement.hospital.patient.entity.ClinicalAuditLog;
 import com.hospitalmanagement.hospital.patient.entity.Patient;
@@ -24,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -52,17 +55,20 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
     private final ClinicalAuditLogRepository audits;
     private final EntityManager entityManager;
     private final Clock clinicClock;
+    private final EncounterAccess access;
+    private final DoctorEligibility eligibility;
 
     @Override
     @Transactional
     public EncounterStatusResponse changeStatus(
             UUID id,
             ChangeEncounterStatusRequest request,
-            String authenticatedSubject
+            JwtAuthenticationToken authentication
     ) {
         stage("started", "validation");
 
-        UUID actor = actorId(authenticatedSubject);
+        UUID actor = EncounterAccess.actorId(authentication);
+        authorizeTarget(request.status(), authentication);
 
         if (request.status() == EncounterStatus.CANCELLED
                 && (request.reason() == null || request.reason().isBlank())
@@ -70,8 +76,11 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
             throw rejected(ErrorCode.ENCOUNTER_REASON_REQUIRED);
         }
 
+        UUID doctorId = request.status() == EncounterStatus.IN_PROGRESS
+                ? access.requireActiveDoctor(actor) : null;
+
         try {
-            return changeLocked(id, request, actor);
+            return changeLocked(id, request, actor, doctorId);
         } catch (PessimisticLockingFailureException
                  | LockTimeoutException
                  | PessimisticLockException exception
@@ -92,7 +101,8 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
     private EncounterStatusResponse changeLocked(
             UUID id,
             ChangeEncounterStatusRequest request,
-            UUID actor
+            UUID actor,
+            UUID doctorId
     ) {
         // PostgreSQL transaction-local bound applies to every row/FK lock below.
         entityManager.createNativeQuery("select set_config('lock_timeout', '3s', true)")
@@ -103,14 +113,9 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
         MedicalEncounter encounter = encounters.findByIdForUpdate(id)
                 .orElseThrow(() -> rejected(ErrorCode.ENCOUNTER_NOT_FOUND));
 
-        EncounterStatus previous = encounter.getStatus();
-
-        if (previous != request.expectedStatus()) {
-            throw rejected(ErrorCode.ENCOUNTER_STATUS_CONFLICT);
-        }
-
-        if (!EncounterTransitions.allows(previous, request.status())) {
-            throw rejected(ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED);
+        if (doctorId != null && (encounter.getDoctor() == null
+                || !doctorId.equals(encounter.getDoctor().getId()))) {
+            throw rejected(ErrorCode.ENCOUNTER_NOT_FOUND);
         }
 
         // Fixed order: encounter -> patient -> doctor. No collection joins under lock.
@@ -123,16 +128,18 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
 
         Instant instant = clinicClock.instant();
 
-        if (request.status() == EncounterStatus.IN_PROGRESS) {
-            validateDoctor(encounter, instant);
+        if (doctorId != null) {
+            validateDoctor(doctorId, actor, instant);
         }
 
-        if (request.status() == EncounterStatus.COMPLETED
-                && (encounter.getDoctor() == null
-                || encounter.getStartedAt() == null
-                || instant.isBefore(encounter.getStartedAt()))
-        ) {
-            throw rejected(ErrorCode.ENCOUNTER_START_REQUIRED);
+        EncounterStatus previous = encounter.getStatus();
+
+        if (previous != request.expectedStatus()) {
+            throw rejected(ErrorCode.ENCOUNTER_STATUS_CONFLICT);
+        }
+
+        if (!EncounterTransitions.allows(previous, request.status())) {
+            throw rejected(ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED);
         }
 
         stage("validated", "transition_validation");
@@ -176,29 +183,28 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
         );
     }
 
-    private void validateDoctor(MedicalEncounter encounter, Instant instant) {
-        if (encounter.getDoctor() == null) {
-            throw rejected(ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE);
-        }
+    private void validateDoctor(UUID doctorId, UUID actor, Instant instant) {
+        Doctor doctor = doctors.findByIdForUpdate(doctorId)
+                .orElseThrow(() -> rejected(ErrorCode.ENCOUNTER_NOT_FOUND));
 
-        Doctor doctor = doctors.findByIdForUpdate(encounter.getDoctor().getId())
-                .orElseThrow(() -> rejected(ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE));
+        if (doctor.getDeletedAt() != null || !actor.equals(doctor.getExternalUserId())) {
+            throw rejected(ErrorCode.ENCOUNTER_NOT_FOUND);
+        }
 
         LocalDate clinicDate = instant.atZone(clinicClock.getZone()).toLocalDate();
-
-        if (doctor.getDeletedAt() != null
-                || (doctor.getLicenseExpiresOn() != null
-                && doctor.getLicenseExpiresOn().isBefore(clinicDate))
-        ) {
-            throw rejected(ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE);
-        }
+        eligibility.requireEligibleProfile(doctor, clinicDate);
     }
 
-    private UUID actorId(String subject) {
-        try {
-            return UUID.fromString(subject);
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            throw rejected(ErrorCode.INVALID_ACTOR_ID);
+    private void authorizeTarget(EncounterStatus target, JwtAuthenticationToken authentication) {
+        if (!EncounterAccess.hasRole(authentication, "ROLE_STAFF")
+                && !EncounterAccess.hasRole(authentication, "ROLE_DOCTOR")) {
+            throw rejected(ErrorCode.ENCOUNTER_ACCESS_DENIED);
+        }
+
+        switch (target) {
+            case ARRIVED, CANCELLED -> EncounterAccess.requireRole(authentication, "ROLE_STAFF");
+            case IN_PROGRESS -> EncounterAccess.requireRole(authentication, "ROLE_DOCTOR");
+            default -> throw rejected(ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED);
         }
     }
 

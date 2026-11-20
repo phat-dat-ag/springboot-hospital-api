@@ -1,7 +1,10 @@
 package com.hospitalmanagement.hospital.security.jwt.user;
 
 import com.hospitalmanagement.hospital.encounter.doctor.DoctorCandidates;
+import com.hospitalmanagement.hospital.encounter.read.EncounterReadRepository;
+import com.hospitalmanagement.hospital.encounter.read.EncounterReadService;
 import com.hospitalmanagement.hospital.encounter.registration.EncounterRegistrationService;
+import com.hospitalmanagement.hospital.encounter.service.EncounterAccess;
 import com.hospitalmanagement.hospital.encounter.registration.EncounterRegistrationStore;
 import com.hospitalmanagement.hospital.encounter.service.EncounterStatusService;
 import com.hospitalmanagement.hospital.patient.dto.response.PatientDemographicsResponse;
@@ -54,7 +57,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration"
 )
 @MockitoBean(types = {
-        DoctorCandidates.class, EncounterRegistrationService.class, EncounterRegistrationStore.class
+        DoctorCandidates.class,
+        EncounterRegistrationService.class,
+        EncounterRegistrationStore.class,
+        EncounterReadRepository.class,
+        EncounterReadService.class,
+        EncounterAccess.class
 })
 @AutoConfigureMockMvc
 class JwtAuthenticationTest {

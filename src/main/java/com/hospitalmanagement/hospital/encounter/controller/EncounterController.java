@@ -35,17 +35,19 @@ public class EncounterController extends BaseController {
     @PatchMapping("/{id}/status")
     @Operation(
             summary = "Change encounter status",
-            description = "Requires ADMIN. Locks the encounter, checks expectedStatus and records "
-                    + "history and audit atomically. Terminal encounters cannot be reopened."
+            description = "STAFF records arrival or cancellation. The assigned DOCTOR starts "
+                    + "examination. Completion is unavailable. Changes and audit are atomic."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status changed"),
             @ApiResponse(responseCode = "400", description = "Invalid UUID, status or reason"),
             @ApiResponse(responseCode = "401", description = "Invalid or missing authentication"),
-            @ApiResponse(responseCode = "403", description = "ADMIN authority required"),
+            @ApiResponse(responseCode = "403", description = "Action requires an authorized actor"),
             @ApiResponse(responseCode = "404", description = "Encounter not found"),
             @ApiResponse(responseCode = "409", description = "Status, workflow or lock conflict"),
-            @ApiResponse(responseCode = "500", description = "Status change could not be recorded")
+            @ApiResponse(responseCode = "500", description = "Status change could not be recorded"),
+            @ApiResponse(responseCode = "502", description = "Invalid account verification response"),
+            @ApiResponse(responseCode = "503", description = "Account verification unavailable")
     })
     public ResponseEntity<@NonNull APIResponse<EncounterStatusResponse>> changeStatus(
             @PathVariable
@@ -60,7 +62,7 @@ public class EncounterController extends BaseController {
         return success(encounters.changeStatus(
                 id,
                 request,
-                authentication.getToken().getSubject()
+                authentication
         ));
     }
 }

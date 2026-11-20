@@ -19,8 +19,7 @@ public final class EncounterTransitions {
                     || target == EncounterStatus.CANCELLED;
             case ARRIVED -> target == EncounterStatus.IN_PROGRESS
                     || target == EncounterStatus.CANCELLED;
-            case IN_PROGRESS -> target == EncounterStatus.COMPLETED;
-            case COMPLETED, CANCELLED, ENTERED_IN_ERROR -> false;
+            case IN_PROGRESS, COMPLETED, CANCELLED, ENTERED_IN_ERROR -> false;
         };
     }
 }

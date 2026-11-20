@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.encounter;
 
+import com.hospitalmanagement.hospital.client.UserServiceClient;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.encounter.dto.request.ChangeEncounterStatusRequest;
@@ -22,6 +23,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,11 +42,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 
+import static com.hospitalmanagement.hospital.encounter.EncounterTestAuthentication.authentication;
+import static org.mockito.BDDMockito.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.core.authority.AuthorityUtils.createAuthorityList;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -73,6 +79,9 @@ class EncounterStatusIntegrationTest {
 
     @Autowired
     private EncounterStatusService encounters;
+
+    @MockitoBean
+    private UserServiceClient accounts;
 
     @Autowired
     private PatientService registrations;
@@ -188,34 +197,25 @@ class EncounterStatusIntegrationTest {
 
         assertThat(started.startedAt()).isEqualTo(NOW);
 
-        EncounterStatusResponse completed = change(
-                fixture,
-                "in_progress",
-                "completed",
-                null
-        );
-
-        assertThat(completed.startedAt()).isEqualTo(NOW);
-        assertThat(completed.endedAt()).isEqualTo(NOW);
+        assertThat(timestamp(fixture.encounter(), "ended_at")).isNull();
         assertThat(timestamp(fixture.encounter(), "created_at")).isEqualTo(created);
         assertThat(count(
                 "encounter_status_histories",
                 "encounter_id",
                 fixture.encounter()
-        )).isEqualTo(3);
+        )).isEqualTo(2);
         assertThat(count(
                 "clinical_audit_logs",
                 "entity_id",
                 fixture.encounter()
-        )).isEqualTo(3);
+        )).isEqualTo(2);
         assertThat(jdbc.queryForList("""
                 SELECT from_status || ':' || to_status FROM encounter_status_histories
                 WHERE encounter_id = ?
                 """, String.class, fixture.encounter()))
                 .containsExactlyInAnyOrder(
                         "scheduled:arrived",
-                        "arrived:in_progress",
-                        "in_progress:completed"
+                        "arrived:in_progress"
                 );
         assertThat(jdbc.queryForObject("""
                         SELECT count(*) FROM clinical_audit_logs
@@ -228,7 +228,7 @@ class EncounterStatusIntegrationTest {
                 fixture.patient(),
                 fixture.actor(),
                 Timestamp.from(NOW)
-        )).isEqualTo(3);
+        )).isEqualTo(2);
         assertThat(jdbc.queryForObject("""
                         SELECT count(*) FROM encounter_status_histories
                         WHERE encounter_id = ? AND actor_user_id = ? AND occurred_at = ?
@@ -237,7 +237,7 @@ class EncounterStatusIntegrationTest {
                 fixture.encounter(),
                 fixture.actor(),
                 Timestamp.from(NOW)
-        )).isEqualTo(3);
+        )).isEqualTo(2);
     }
 
     @Test
@@ -305,7 +305,7 @@ class EncounterStatusIntegrationTest {
         assertError(ErrorCode.ENCOUNTER_NOT_FOUND, () -> encounters.changeStatus(
                 UUID.randomUUID(),
                 request("arrived", "in_progress", null),
-                fixture.actor().toString()
+                authentication(fixture.actor().toString(), "ROLE_DOCTOR")
         ));
 
         jdbc.update(
@@ -325,7 +325,7 @@ class EncounterStatusIntegrationTest {
         Fixture missing = fixture("arrived", false);
 
         assertError(
-                ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE,
+                ErrorCode.ENCOUNTER_NOT_FOUND,
                 () -> change(missing, "arrived", "in_progress", null)
         );
 
@@ -339,7 +339,7 @@ class EncounterStatusIntegrationTest {
         );
 
         assertError(
-                ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE,
+                ErrorCode.ENCOUNTER_ACCESS_DENIED,
                 () -> change(deleted, "arrived", "in_progress", null)
         );
 
@@ -375,7 +375,7 @@ class EncounterStatusIntegrationTest {
     }
 
     @Test
-    void rejectsClockBeforeStartWithoutUpdatingEncounter() {
+    void rejectsCompletionWithoutUpdatingEncounter() {
         Fixture fixture = fixture("in_progress", true);
 
         jdbc.update(
@@ -384,7 +384,7 @@ class EncounterStatusIntegrationTest {
         );
 
         assertError(
-                ErrorCode.ENCOUNTER_START_REQUIRED,
+                ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED,
                 () -> change(fixture, "in_progress", "completed", null)
         );
         assertNoEvents(fixture);
@@ -392,9 +392,157 @@ class EncounterStatusIntegrationTest {
     }
 
     @Test
+    void queuesUseClinicDatesAndAssignmentAndAuditOnlyDisclosedRows() throws Exception {
+        Fixture first = fixture("scheduled", true);
+        Fixture other = fixture("scheduled", true);
+        Fixture cancelled = fixture("cancelled", true);
+        Instant startOfClinicDay = Instant.parse("2026-11-18T17:00:00Z");
+
+        schedule(first, startOfClinicDay);
+        schedule(other, startOfClinicDay);
+        schedule(cancelled, startOfClinicDay);
+        Fixture yesterday = fixture("scheduled", true);
+        schedule(yesterday, startOfClinicDay.minusSeconds(1));
+        String root = "/api/v1/hospital/encounters";
+        UUID staff = UUID.randomUUID();
+
+        mvc.perform(get(root).param("size", "1")
+                        .with(jwt().jwt(token -> token.subject(staff.toString()))
+                                .authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.date").value("2026-11-19"))
+                .andExpect(jsonPath("$.data.hasNext").value(true))
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].chiefComplaint").doesNotExist());
+        assertThat(count("medical_record_access_logs", "actor_user_id", staff)).isEqualTo(1);
+
+        mvc.perform(get(root + "/assigned").param("doctorId", other.doctor().toString())
+                        .with(jwt().jwt(token -> token.subject(first.actor().toString()))
+                                .authorities(createAuthorityList("ROLE_DOCTOR"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(first.encounter().toString()));
+
+        mvc.perform(get(root + "/" + other.encounter())
+                        .with(jwt().jwt(token -> token.subject(first.actor().toString()))
+                                .authorities(createAuthorityList("ROLE_DOCTOR"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ENCOUNTER_NOT_FOUND"));
+        assertThat(count("medical_record_access_logs", "actor_user_id", first.actor()))
+                .isEqualTo(1);
+
+        mvc.perform(get(root).param("status", "cancelled")
+                        .with(jwt().jwt(token -> token.subject(staff.toString()))
+                                .authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value(cancelled.encounter().toString()))
+                .andExpect(jsonPath("$.data.items[0].cancellationReason").doesNotExist());
+        mvc.perform(get(root + "/" + cancelled.encounter())
+                        .with(jwt().jwt(token -> token.subject(staff.toString()))
+                                .authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.cancellationReason").value("Test fixture"));
+    }
+
+    @Test
+    void arrivalIsDerivedFromCommittedHistoryAndReadAuditFailureWithholdsDetails()
+            throws Exception {
+        Fixture fixture = fixture("scheduled", true);
+        change(fixture, "scheduled", "arrived", null);
+        String path = "/api/v1/hospital/encounters/" + fixture.encounter();
+        UUID actor = UUID.fromString("00000000-0000-0000-0000-00000000e003");
+        jdbc.execute("""
+                CREATE OR REPLACE FUNCTION test_p03_read_audit_failure()
+                RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.actor_user_id = '00000000-0000-0000-0000-00000000e003' THEN
+                        RAISE EXCEPTION USING ERRCODE = '23514';
+                    END IF;
+                    RETURN NEW;
+                END
+                $$
+                """);
+        jdbc.execute("""
+                CREATE OR REPLACE TRIGGER test_p03_read_audit_failure
+                BEFORE INSERT ON medical_record_access_logs FOR EACH ROW
+                EXECUTE FUNCTION test_p03_read_audit_failure()
+                """);
+        mvc.perform(get(path).with(jwt().jwt(token -> token.subject(actor.toString()))
+                        .authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("PATIENT_ACCESS_LOG_FAILED"))
+                .andExpect(jsonPath("$.data").doesNotExist());
+        assertThat(count("medical_record_access_logs", "actor_user_id", actor)).isZero();
+
+        mvc.perform(get(path).with(jwt().jwt(token -> token.subject(fixture.actor().toString()))
+                        .authorities(createAuthorityList("ROLE_DOCTOR"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.arrivedAt").value(NOW.toString()))
+                .andExpect(jsonPath("$.data.startedAt").doesNotExist());
+    }
+
+    private void schedule(Fixture fixture, Instant scheduledAt) {
+        jdbc.update("UPDATE medical_encounters SET scheduled_at = ? WHERE id = ?",
+                Timestamp.from(scheduledAt), fixture.encounter());
+    }
+
+    @Test
+    void deniesUnauthorizedRolesAndPreventsCrossDoctorChanges() throws Exception {
+        Fixture fixture = fixture("arrived", true);
+        Fixture other = fixture("arrived", true);
+        String root = "/api/v1/hospital/encounters";
+        String detail = root + "/" + fixture.encounter();
+        String changePath = detail + "/status";
+
+        for (String path : List.of(root, root + "/assigned", detail)) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+            mvc.perform(get(path).header("Authorization", "Bearer invalid"))
+                    .andExpect(status().isUnauthorized());
+            for (String role : List.of("ROLE_USER", "ROLE_PATIENT", "ROLE_ADMIN")) {
+                mvc.perform(get(path).with(jwt().authorities(createAuthorityList(role))))
+                        .andExpect(status().isForbidden());
+            }
+        }
+
+        mvc.perform(get(root).with(jwt().authorities(createAuthorityList("ROLE_DOCTOR"))))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(root + "/assigned")
+                        .with(jwt().authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isForbidden());
+
+        String begin = "{\"expectedStatus\":\"arrived\",\"status\":\"in_progress\"}";
+        mvc.perform(patch(changePath).contentType(MediaType.APPLICATION_JSON).content(begin))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(patch(changePath).header("Authorization", "Bearer invalid")
+                        .contentType(MediaType.APPLICATION_JSON).content(begin))
+                .andExpect(status().isUnauthorized());
+
+        for (String role : List.of("ROLE_USER", "ROLE_PATIENT", "ROLE_ADMIN", "ROLE_STAFF")) {
+            mvc.perform(patch(changePath)
+                            .with(jwt().jwt(token -> token.subject(other.actor().toString()))
+                                    .authorities(createAuthorityList(role)))
+                            .contentType(MediaType.APPLICATION_JSON).content(begin))
+                    .andExpect(status().isForbidden());
+        }
+
+        mvc.perform(patch(changePath)
+                        .with(jwt().jwt(token -> token.subject(other.actor().toString()))
+                                .authorities(createAuthorityList("ROLE_DOCTOR")))
+                        .contentType(MediaType.APPLICATION_JSON).content(begin))
+                .andExpect(status().isNotFound());
+        assertError(ErrorCode.ENCOUNTER_ACCESS_DENIED, () -> encounters.changeStatus(
+                fixture.encounter(),
+                request("arrived", "cancelled", "Test"),
+                authentication(fixture.actor().toString(), "ROLE_DOCTOR")
+        ));
+        assertNoEvents(fixture);
+    }
+
+    @Test
     void rollsBackStatusTimestampsHistoryAndAuditWhenEitherEventInsertFails() {
         for (UUID actor : List.of(HISTORY_FAILURE, AUDIT_FAILURE)) {
-            Fixture fixture = fixture("arrived", true);
+            Fixture fixture = fixture("arrived", true, actor);
 
             Timestamp originalUpdated = timestamp(fixture.encounter(), "updated_at");
 
@@ -403,7 +551,7 @@ class EncounterStatusIntegrationTest {
                     () -> encounters.changeStatus(
                             fixture.encounter(),
                             request("arrived", "in_progress", null),
-                            actor.toString()
+                            authentication(actor.toString(), "ROLE_DOCTOR")
                     )
             );
 
@@ -457,6 +605,42 @@ class EncounterStatusIntegrationTest {
     }
 
     @Test
+    void serializesCompetingArrivalAndCancellationOrStart() throws Exception {
+        for (String initial : List.of("scheduled", "arrived")) {
+            Fixture fixture = fixture(initial, true);
+            String alternate = initial.equals("scheduled") ? "arrived" : "in_progress";
+            var executor = Executors.newFixedThreadPool(2);
+            var start = new CountDownLatch(1);
+            try {
+                var first = executor.submit(() -> compete(fixture, initial, alternate, start));
+                var second = executor.submit(() -> compete(fixture, initial, "cancelled", start));
+                start.countDown();
+
+                assertThat(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                        .containsExactlyInAnyOrder("committed", "ENCOUNTER_STATUS_CONFLICT");
+            } finally {
+                executor.shutdownNow();
+            }
+
+            assertThat(currentStatus(fixture)).isIn(alternate, "cancelled");
+            assertThat(count("encounter_status_histories", "encounter_id", fixture.encounter()))
+                    .isEqualTo(1);
+            assertThat(count("clinical_audit_logs", "entity_id", fixture.encounter())).isEqualTo(1);
+        }
+    }
+
+    private String compete(Fixture fixture, String initial, String target, CountDownLatch start)
+            throws InterruptedException {
+        start.await();
+        try {
+            change(fixture, initial, target, target.equals("cancelled") ? "Test" : null);
+            return "committed";
+        } catch (BusinessException failure) {
+            return failure.getErrorCode().name();
+        }
+    }
+
+    @Test
     void boundedLockWaitReturnsSafeConflictAndNoPartialWrites() throws Exception {
         Fixture fixture = fixture("arrived", true);
 
@@ -505,7 +689,7 @@ class EncounterStatusIntegrationTest {
         mvc.perform(patch(path)
                         .with(jwt()
                                 .jwt(token -> token.subject(fixture.actor().toString()))
-                                .authorities(createAuthorityList("ROLE_ADMIN"))
+                                .authorities(createAuthorityList("ROLE_STAFF"))
                         )
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedStatus\":\"scheduled\",\"status\":\"cancelled\"}")
@@ -518,7 +702,7 @@ class EncounterStatusIntegrationTest {
         mvc.perform(patch(path)
                         .with(jwt()
                                 .jwt(token -> token.subject(fixture.actor().toString()))
-                                .authorities(createAuthorityList("ROLE_ADMIN"))
+                                .authorities(createAuthorityList("ROLE_STAFF"))
                         )
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expectedStatus\":\"scheduled\",\"status\":\"arrived\"}"))
@@ -596,7 +780,7 @@ class EncounterStatusIntegrationTest {
                     assertThat(attempt.get(5, TimeUnit.SECONDS)).isEqualTo(
                             table.equals("patients")
                                     ? "ENCOUNTER_PATIENT_INACTIVE"
-                                    : "ENCOUNTER_DOCTOR_UNAVAILABLE"
+                                    : "ENCOUNTER_NOT_FOUND"
                     );
                 } finally {
                     blocker.rollback();
@@ -663,8 +847,12 @@ class EncounterStatusIntegrationTest {
     }
 
     private Fixture fixture(String status, boolean assignedDoctor) {
+        return fixture(status, assignedDoctor, UUID.randomUUID());
+    }
+
+    private Fixture fixture(String status, boolean assignedDoctor, UUID actor) {
         UUID patient = UUID.randomUUID();
-        UUID doctor = assignedDoctor ? UUID.randomUUID() : null;
+        UUID doctor = UUID.randomUUID();
         UUID encounter = UUID.randomUUID();
 
         jdbc.update(
@@ -672,12 +860,13 @@ class EncounterStatusIntegrationTest {
                 patient, "P-" + patient, "Synthetic encounter patient"
         );
 
-        if (doctor != null) {
-            jdbc.update("""
-                    INSERT INTO doctors (id, license_authority, license_number, given_name)
-                    VALUES (?, 'TEST_ONLY', ?, 'Synthetic doctor')
-                    """, doctor, doctor.toString());
-        }
+        jdbc.update("""
+                INSERT INTO doctors (
+                    id, external_user_id, license_authority, license_number, given_name
+                ) VALUES (?, ?, 'TEST_ONLY', ?, 'Synthetic doctor')
+                """, doctor, actor, doctor.toString());
+        given(accounts.getAccountIdentity(actor))
+                .willReturn(new UserServiceClient.AccountIdentity(actor, true, 4));
 
         Instant started = List.of("in_progress", "completed").contains(status) ? NOW : null;
         Instant ended = status.equals("completed") ? NOW : null;
@@ -687,12 +876,12 @@ class EncounterStatusIntegrationTest {
                             (id, encounter_number, patient_id, doctor_id, status,
                             started_at, ended_at, cancellation_reason)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, encounter, "E-" + encounter, patient, doctor, status,
+                        """, encounter, "E-" + encounter, patient, assignedDoctor ? doctor : null, status,
                 started == null ? null : Timestamp.from(started),
                 ended == null ? null : Timestamp.from(ended),
                 status.equals("cancelled") ? "Test fixture" : null);
 
-        return new Fixture(encounter, patient, doctor, UUID.randomUUID());
+        return new Fixture(encounter, patient, doctor, actor);
     }
 
     private EncounterStatusResponse change(
@@ -704,7 +893,9 @@ class EncounterStatusIntegrationTest {
         return encounters.changeStatus(
                 fixture.encounter(),
                 request(expected, target, reason),
-                fixture.actor().toString()
+                authentication(fixture.actor().toString(),
+                        target.equals("in_progress") || target.equals("completed")
+                                ? "ROLE_DOCTOR" : "ROLE_STAFF")
         );
     }
 
@@ -765,7 +956,7 @@ class EncounterStatusIntegrationTest {
         @Bean
         @Primary
         Clock fixedClock() {
-            return Clock.fixed(NOW, ZoneId.of("Asia/Bangkok"));
+            return Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh"));
         }
     }
 }
