@@ -29,15 +29,15 @@ public class ClinicalDocumentationRepository {
 
     Vitals insertVitals(UUID encounter, UUID actor, Instant measured, VitalMeasurements values) {
         return jdbc.sql("""
-                INSERT INTO vital_signs (
-                    encounter_id, recorded_by_user_id, measured_at, temperature_c,
-                    systolic_bp_mmhg, diastolic_bp_mmhg, heart_rate_bpm, respiratory_rate_per_min,
-                    oxygen_saturation_pct, weight_kg, height_cm
-                ) VALUES (
-                    :encounter, :actor, :measured, :temp, :systolic, :diastolic, :heart,
-                    :respiratory, :oxygen, :weight, :height
-                ) RETURNING *
-                """)
+                        INSERT INTO vital_signs (
+                            encounter_id, recorded_by_user_id, measured_at, temperature_c,
+                            systolic_bp_mmhg, diastolic_bp_mmhg, heart_rate_bpm, respiratory_rate_per_min,
+                            oxygen_saturation_pct, weight_kg, height_cm
+                        ) VALUES (
+                            :encounter, :actor, :measured, :temp, :systolic, :diastolic, :heart,
+                            :respiratory, :oxygen, :weight, :height
+                        ) RETURNING *
+                        """)
                 .param("encounter", encounter).param("actor", actor)
                 .param("measured", measured.atOffset(ZoneOffset.UTC))
                 .param("temp", values.temperatureC()).param("systolic", values.systolicBpMmhg())
@@ -51,10 +51,10 @@ public class ClinicalDocumentationRepository {
 
     List<Vitals> vitals(UUID encounter, long offset, int limit) {
         return jdbc.sql("""
-                SELECT * FROM vital_signs WHERE encounter_id = :encounter
-                    AND status IN ('recorded', 'corrected')
-                ORDER BY measured_at DESC, id DESC LIMIT :limit OFFSET :offset
-                """)
+                        SELECT * FROM vital_signs WHERE encounter_id = :encounter
+                            AND status IN ('recorded', 'corrected')
+                        ORDER BY measured_at DESC, id DESC LIMIT :limit OFFSET :offset
+                        """)
                 .param("encounter", encounter).param("limit", limit).param("offset", offset)
                 .query(ClinicalDocumentationRepository::vitals)
                 .list();
@@ -62,44 +62,57 @@ public class ClinicalDocumentationRepository {
 
     Note insertNote(UUID encounter, UUID doctor, String content) {
         return jdbc.sql("""
-                INSERT INTO clinical_notes (encounter_id, author_doctor_id, note_type, content)
-                VALUES (:encounter, :doctor, 'assessment', :content) RETURNING *
-                """)
+                        INSERT INTO clinical_notes (encounter_id, author_doctor_id, note_type, content)
+                        VALUES (:encounter, :doctor, 'assessment', :content) RETURNING *
+                        """)
                 .param("encounter", encounter).param("doctor", doctor).param("content", content)
                 .query(ClinicalDocumentationRepository::note)
                 .single();
     }
 
-    List<NoteSummary> notes(UUID encounter, UUID doctor, long offset, int limit) {
+    List<NoteSummary> notes(
+            UUID encounter,
+            UUID doctor,
+            boolean allowDrafts,
+            long offset,
+            int limit
+    ) {
         return jdbc.sql("""
-                SELECT id, author_doctor_id, note_type, status, created_at, updated_at, signed_at
-                FROM clinical_notes WHERE encounter_id = :encounter
-                    AND (status = 'signed' OR (status = 'draft' AND author_doctor_id = :doctor))
-                ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset
-                """)
-                .param("encounter", encounter).param("doctor", doctor)
+                        SELECT id, author_doctor_id, note_type, status, created_at, updated_at, signed_at
+                        FROM clinical_notes WHERE encounter_id = :encounter
+                            AND (status = 'signed' OR (:drafts AND status = 'draft' AND author_doctor_id = :doctor))
+                        ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset
+                        """)
+                .param("encounter", encounter).param("doctor", doctor).param("drafts", allowDrafts)
                 .param("limit", limit).param("offset", offset)
                 .query(ClinicalDocumentationRepository::summary)
                 .list();
     }
 
-    Optional<Note> note(UUID encounter, UUID id, UUID doctor, boolean lock) {
+    Optional<Note> note(
+            UUID encounter,
+            UUID id,
+            UUID doctor,
+            boolean allowDrafts,
+            boolean lock
+    ) {
         String sql = """
                 SELECT * FROM clinical_notes WHERE encounter_id = :encounter AND id = :id
-                    AND (status = 'signed' OR (status = 'draft' AND author_doctor_id = :doctor))
+                    AND (status = 'signed' OR (:drafts AND status = 'draft' AND author_doctor_id = :doctor))
                 """;
 
         return jdbc.sql(lock ? sql + " FOR UPDATE" : sql)
                 .param("encounter", encounter).param("id", id).param("doctor", doctor)
+                .param("drafts", allowDrafts)
                 .query(ClinicalDocumentationRepository::note)
                 .optional();
     }
 
     Note edit(UUID encounter, UUID id, String content) {
         return jdbc.sql("""
-                UPDATE clinical_notes SET content = :content
-                WHERE encounter_id = :encounter AND id = :id AND status = 'draft' RETURNING *
-                """)
+                        UPDATE clinical_notes SET content = :content
+                        WHERE encounter_id = :encounter AND id = :id AND status = 'draft' RETURNING *
+                        """)
                 .param("encounter", encounter).param("id", id).param("content", content)
                 .query(ClinicalDocumentationRepository::note)
                 .single();
@@ -107,10 +120,10 @@ public class ClinicalDocumentationRepository {
 
     Note sign(UUID encounter, UUID id) {
         return jdbc.sql("""
-                UPDATE clinical_notes SET status = 'signed',
-                    signed_at = greatest(clock_timestamp(), created_at)
-                WHERE encounter_id = :encounter AND id = :id AND status = 'draft' RETURNING *
-                """)
+                        UPDATE clinical_notes SET status = 'signed',
+                            signed_at = greatest(clock_timestamp(), created_at)
+                        WHERE encounter_id = :encounter AND id = :id AND status = 'draft' RETURNING *
+                        """)
                 .param("encounter", encounter).param("id", id)
                 .query(ClinicalDocumentationRepository::note)
                 .single();
@@ -119,12 +132,12 @@ public class ClinicalDocumentationRepository {
     private static Vitals vitals(ResultSet row, int index) throws SQLException {
         return new Vitals(row.getObject("id", UUID.class), time(row, "measured_at"),
                 time(row, "created_at"), new VitalMeasurements(
-                        row.getBigDecimal("temperature_c"), row.getBigDecimal("systolic_bp_mmhg"),
-                        row.getBigDecimal("diastolic_bp_mmhg"), row.getBigDecimal("heart_rate_bpm"),
-                        row.getBigDecimal("respiratory_rate_per_min"),
-                        row.getBigDecimal("oxygen_saturation_pct"), row.getBigDecimal("weight_kg"),
-                        row.getBigDecimal("height_cm")
-                ));
+                row.getBigDecimal("temperature_c"), row.getBigDecimal("systolic_bp_mmhg"),
+                row.getBigDecimal("diastolic_bp_mmhg"), row.getBigDecimal("heart_rate_bpm"),
+                row.getBigDecimal("respiratory_rate_per_min"),
+                row.getBigDecimal("oxygen_saturation_pct"), row.getBigDecimal("weight_kg"),
+                row.getBigDecimal("height_cm")
+        ));
     }
 
     private static NoteSummary summary(ResultSet row, int index) throws SQLException {

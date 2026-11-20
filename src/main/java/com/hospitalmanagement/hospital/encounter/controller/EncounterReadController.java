@@ -101,6 +101,18 @@ public class EncounterReadController extends BaseController {
         return success(encounters.details(id, authentication), noStore());
     }
 
+    @GetMapping("/{id}/status-history")
+    @Operation(summary = "Read the assigned encounter's status chronology")
+    @ApiResponse(responseCode = "404", description = "Missing or out-of-scope encounter")
+    public ResponseEntity<@NonNull APIResponse<EncounterReadService.StatusHistory>> history(
+            @PathVariable UUID id,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") int size,
+            JwtAuthenticationToken authentication
+    ) {
+        return success(encounters.statusHistory(id, cursor, size, authentication), noStore());
+    }
+
     private static ResponseEntity.BodyBuilder noStore() {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore());
     }

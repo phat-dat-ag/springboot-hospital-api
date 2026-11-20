@@ -17,10 +17,12 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -84,6 +86,103 @@ public class EncounterReadService {
         return encounter;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public PatientHistory visits(
+            UUID patient,
+            String cursor,
+            int size,
+            JwtAuthenticationToken authentication
+    ) {
+        UUID actor = EncounterAccess.actorId(authentication);
+        EncounterAccess.requireRole(authentication, "ROLE_DOCTOR");
+        HistoryCursor boundary = pageBoundary(cursor, size);
+        UUID doctor = access.requireActiveDoctor(actor);
+
+        var header = encounters.patientWithCompletedVisit(patient, doctor, actor)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        var rows = encounters.visits(patient, doctor, actor, boundary, size + 1);
+        var items = List.copyOf(rows.subList(0, Math.min(rows.size(), size)));
+        var events = new ArrayList<MedicalRecordAccessLog>();
+
+        UUID correlation = UUID.randomUUID();
+        events.add(accessEvent(
+                patient,
+                patient,
+                actor,
+                RecordAccessOperation.SEARCH,
+                "patients",
+                "patient_visit_history",
+                correlation
+        ));
+
+        items.forEach(visit -> events.add(accessEvent(
+                patient,
+                visit.encounter().id(),
+                actor,
+                RecordAccessOperation.SEARCH,
+                "medical_encounters",
+                "patient_visit_history",
+                correlation
+        )));
+
+        saveAccess(events);
+
+        String next = null;
+        if (rows.size() > size) {
+            var last = items.get(size - 1);
+
+            next = new HistoryCursor(
+                    last.createdAt(),
+                    last.encounter().id()
+            ).encode();
+        }
+
+        return new PatientHistory(header, items, next);
+    }
+
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public StatusHistory statusHistory(
+            UUID id,
+            String cursor,
+            int size,
+            JwtAuthenticationToken authentication
+    ) {
+        UUID actor = EncounterAccess.actorId(authentication);
+        EncounterAccess.requireRole(authentication, "ROLE_DOCTOR");
+        HistoryCursor boundary = pageBoundary(cursor, size);
+        UUID doctor = access.requireActiveDoctor(actor);
+
+        var encounter = encounters.find(id, doctor, actor)
+                .orElseThrow(() -> new BusinessException(
+                                ErrorCode.ENCOUNTER_NOT_FOUND
+                        )
+                );
+        var rows = encounters.statusHistory(id, boundary, size + 1);
+        var items = List.copyOf(rows.subList(0, Math.min(rows.size(), size)));
+        recordAccess(
+                List.of(encounter),
+                actor,
+                RecordAccessOperation.VIEW,
+                "encounter_status_history"
+        );
+
+        String next = null;
+        if (rows.size() > size) {
+            var last = items.get(size - 1);
+            next = new HistoryCursor(last.occurredAt(), last.id()).encode();
+        }
+
+        return new StatusHistory(items, next);
+    }
+
+    private static HistoryCursor pageBoundary(String cursor, int size) {
+        if (size < 1 || size > 50) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        return HistoryCursor.parse(cursor);
+    }
+
     private static List<String> statuses(String status, boolean assigned) {
         if (status == null) {
             return assigned ? List.of("scheduled", "arrived", "in_progress")
@@ -107,27 +206,66 @@ public class EncounterReadService {
             return;
         }
 
-        UUID auditCorrelation = UUID.randomUUID();
+        UUID correlation = UUID.randomUUID();
+
+        saveAccess(encounters.stream()
+                .map(encounter -> accessEvent(
+                        encounter.patientId(),
+                        encounter.id(),
+                        actor,
+                        operation,
+                        "medical_encounters",
+                        purpose,
+                        correlation
+                ))
+                .toList());
+    }
+
+    private MedicalRecordAccessLog accessEvent(
+            UUID patient,
+            UUID id,
+            UUID actor,
+            RecordAccessOperation operation,
+            String entity,
+            String purpose,
+            UUID correlation
+    ) {
+        return MedicalRecordAccessLog.builder()
+                .patient(patients.getReferenceById(patient))
+                .actorUserId(actor)
+                .actorType(AuditActorType.USER)
+                .operation(operation)
+                .entityType(entity)
+                .entityId(id)
+                .purposeCode(purpose)
+                .outcome(RecordAccessOutcome.ALLOWED)
+                .correlationId(correlation)
+                .build();
+    }
+
+    private void saveAccess(List<MedicalRecordAccessLog> events) {
         try {
-            audit.saveAllAndFlush(encounters.stream()
-                    .map(encounter -> MedicalRecordAccessLog.builder()
-                            .patient(patients.getReferenceById(encounter.patientId()))
-                            .actorUserId(actor)
-                            .actorType(AuditActorType.USER)
-                            .operation(operation)
-                            .entityType("medical_encounters")
-                            .entityId(encounter.id())
-                            .purposeCode(purpose)
-                            .outcome(RecordAccessOutcome.ALLOWED)
-                            .correlationId(auditCorrelation)
-                            .build())
-                    .toList());
+            audit.saveAllAndFlush(events);
         } catch (DataAccessException failure) {
             log.atError()
                     .addKeyValue("event", "encounter.access_log.failed")
                     .log("Encounter access audit could not be recorded");
+
             throw new BusinessException(ErrorCode.PATIENT_ACCESS_LOG_FAILED);
         }
+    }
+
+    public record PatientHistory(
+            EncounterReadRepository.PatientHeader patient,
+            List<EncounterReadRepository.Visit> items,
+            String nextCursor
+    ) {
+    }
+
+    public record StatusHistory(
+            List<EncounterReadRepository.StatusEvent> items,
+            String nextCursor
+    ) {
     }
 
     public record Page(

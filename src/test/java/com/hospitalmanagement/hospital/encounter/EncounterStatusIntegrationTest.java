@@ -692,6 +692,101 @@ class EncounterStatusIntegrationTest {
         return id;
     }
 
+    @Test
+    void pagesCompletedVisitsForTheAssignedDoctorAndHidesOtherVisits() throws Exception {
+        Fixture own = fixture("completed", true);
+        Fixture other = fixture("completed", true);
+        UUID repeat = UUID.randomUUID();
+
+        jdbc.update("""
+                INSERT INTO medical_encounters (id, encounter_number, patient_id, doctor_id,
+                    status, started_at, ended_at, created_at)
+                SELECT ?, ?, patient_id, doctor_id, status, started_at, ended_at, created_at
+                FROM medical_encounters WHERE id = ?
+                """, repeat, "E-" + repeat, own.encounter());
+        jdbc.update("""
+                        INSERT INTO medical_encounters (encounter_number, patient_id, doctor_id,
+                            status, started_at, ended_at)
+                        VALUES (?, ?, ?, 'completed', now(), now()), (?, ?, ?, 'scheduled', null, null)
+                        """, "E-" + UUID.randomUUID(), own.patient(), other.doctor(),
+                "E-" + UUID.randomUUID(), own.patient(), own.doctor());
+        String path = "/api/v1/hospital/patients/" + own.patient() + "/encounters";
+
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        mvc.perform(get(path).with(jwt().authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(path).with(doctor(own)).param("cursor", "invalid"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/hospital/patients/" + other.patient() + "/encounters")
+                        .with(doctor(own)))
+                .andExpect(status().isNotFound());
+
+        var response = mvc.perform(get(path).with(doctor(own)).param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.patient.id").value(own.patient().toString()))
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andReturn().getResponse();
+
+        JsonMapper mapper = new JsonMapper();
+        JsonNode page = mapper.readTree(response.getContentAsByteArray()).path("data");
+        String first = page.path("items").path(0).path("encounter").path("id").asString();
+        String second = first.equals(repeat.toString())
+                ? own.encounter().toString()
+                : repeat.toString();
+        assertThat(first).isIn(own.encounter().toString(), repeat.toString());
+
+        mvc.perform(get(path).with(doctor(own)).param("size", "1")
+                        .param("cursor", page.path("nextCursor").asString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].encounter.id").value(second))
+                .andExpect(jsonPath("$.data.nextCursor").doesNotExist());
+        assertThat(count(
+                "medical_record_access_logs",
+                "actor_user_id",
+                own.actor()
+        )).isEqualTo(4);
+    }
+
+    @Test
+    void statusHistoryIsScopedAndOmitsReasonsAndActorIds() throws Exception {
+        Fixture visit = fixture("scheduled", true);
+        Fixture other = fixture("scheduled", true);
+        change(visit, "scheduled", "arrived", "Private synthetic reason");
+        String path = clinicalPath(visit) + "/status-history";
+
+        mvc.perform(get(path).with(doctor(other))).andExpect(status().isNotFound());
+        mvc.perform(get(path).with(doctor(visit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].toStatus").value("arrived"))
+                .andExpect(jsonPath("$.data.items[0].actorUserId").doesNotExist())
+                .andExpect(jsonPath("$.data.items[0].reason").doesNotExist());
+    }
+
+    @Test
+    void completedEncounterNoteViewsExcludeEvenTheAssignedDoctorsDrafts() throws Exception {
+        Fixture visit = fixture("completed", true);
+        UUID draft = UUID.randomUUID();
+        UUID signed = UUID.randomUUID();
+
+        jdbc.update("""
+                        INSERT INTO clinical_notes (id, encounter_id, author_doctor_id, note_type,
+                            content, status, signed_at)
+                        VALUES (?, ?, ?, 'assessment', 'Draft fixture', 'draft', null),
+                            (?, ?, ?, 'assessment', 'Signed fixture', 'signed', now())
+                        """, draft, visit.encounter(), visit.doctor(), signed,
+                visit.encounter(), visit.doctor());
+
+        String path = clinicalPath(visit) + "/notes";
+
+        mvc.perform(get(path).with(doctor(visit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(signed.toString()));
+        mvc.perform(get(path + "/" + draft).with(doctor(visit)))
+                .andExpect(status().isNotFound());
+    }
+
     private static String diagnosisBody(UUID code, boolean primary) {
         return """
                 {"diagnosisCodeId":"%s","primary":%s,"clinicalDescription":"Synthetic diagnosis"}

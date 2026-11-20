@@ -130,7 +130,12 @@ public class ClinicalDocumentationService {
 
         Context scope = scope(id, authentication, false);
 
-        var rows = documentation.notes(id, scope.doctor(), offset, size + 1);
+        var rows = documentation.notes(
+                id,
+                scope.doctor(),
+                scope.allowDrafts(),
+                offset, size + 1
+        );
 
         readAudit(scope, RecordAccessOperation.SEARCH, "medical_encounters", id, "encounter_notes");
 
@@ -141,8 +146,15 @@ public class ClinicalDocumentationService {
     public Note note(UUID id, UUID noteId, JwtAuthenticationToken authentication) {
         Context scope = scope(id, authentication, false);
 
-        Note note = documentation.note(id, noteId, scope.doctor(), false)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CLINICAL_NOTE_NOT_FOUND));
+        Note note = documentation.note(
+                        id, noteId,
+                        scope.doctor(),
+                        scope.allowDrafts(),
+                        false
+                )
+                .orElseThrow(() -> new BusinessException(
+                        ErrorCode.CLINICAL_NOTE_NOT_FOUND
+                ));
 
         readAudit(scope, RecordAccessOperation.VIEW, NOTE_ENTITY, noteId, "encounter_note");
 
@@ -286,7 +298,7 @@ public class ClinicalDocumentationService {
     }
 
     private void requireDraft(Context scope, UUID encounter, UUID noteId, String revision) {
-        Note note = documentation.note(encounter, noteId, scope.doctor(), true)
+        Note note = documentation.note(encounter, noteId, scope.doctor(), true, true)
                 .filter(record -> record.authorDoctorId().equals(scope.doctor()))
                 .orElseThrow(() -> new BusinessException(ErrorCode.CLINICAL_NOTE_NOT_FOUND));
 
@@ -332,7 +344,12 @@ public class ClinicalDocumentationService {
             }
         }
 
-        return new Context(actor, doctorId, patient);
+        return new Context(
+                actor,
+                doctorId,
+                patient,
+                encounter.getStatus() != EncounterStatus.COMPLETED
+        );
     }
 
     private void writeAudit(
@@ -395,6 +412,11 @@ public class ClinicalDocumentationService {
         return new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND);
     }
 
-    private record Context(UUID actor, UUID doctor, Patient patient) {
+    private record Context(
+            UUID actor,
+            UUID doctor,
+            Patient patient,
+            boolean allowDrafts
+    ) {
     }
 }

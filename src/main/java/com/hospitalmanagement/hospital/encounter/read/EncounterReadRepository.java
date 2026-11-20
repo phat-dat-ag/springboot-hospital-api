@@ -16,7 +16,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class EncounterReadRepository {
     private static final String SELECT = """
-            SELECT e.id, e.encounter_number, e.patient_id, e.doctor_id, e.status,
+            SELECT e.id, e.encounter_number, e.patient_id, e.doctor_id, e.status, e.created_at,
                    concat_ws(' ', p.given_name, nullif(p.family_name, '')) AS patient_name,
                    CASE WHEN d.id IS NOT NULL
                         THEN concat_ws(' ', d.given_name, nullif(d.family_name, ''))
@@ -69,6 +69,63 @@ public class EncounterReadRepository {
                 .param("id", id)
                 .query(EncounterReadRepository::map)
                 .optional();
+    }
+
+    Optional<PatientHeader> patientWithCompletedVisit(UUID patient, UUID doctor, UUID actor) {
+        return jdbc.sql("""
+                        SELECT p.id, p.given_name, p.family_name
+                        FROM patients p
+                        WHERE p.id = :patient AND p.deleted_at IS NULL AND EXISTS (
+                            SELECT 1 FROM medical_encounters e JOIN doctors d ON d.id = e.doctor_id
+                            WHERE e.patient_id = p.id AND e.status = 'completed'
+                              AND e.doctor_id = :doctor AND d.external_user_id = :actor
+                              AND d.deleted_at IS NULL
+                        )
+                        """)
+                .param("patient", patient).param("doctor", doctor).param("actor", actor)
+                .query((row, index) -> new PatientHeader(
+                        row.getObject("id", UUID.class), row.getString("given_name"),
+                        row.getString("family_name")))
+                .optional();
+    }
+
+    List<Visit> visits(UUID patient, UUID doctor, UUID actor, HistoryCursor cursor, int limit) {
+        String boundary = cursor == null ? "" : "AND (e.created_at, e.id) < (:time, :cursorId)";
+        var query = scoped("AND e.patient_id = :patient AND e.status = 'completed'\n"
+                        + boundary + "\nORDER BY e.created_at DESC, e.id DESC LIMIT :limit",
+                doctor, actor, false)
+                .param("patient", patient).param("limit", limit);
+        if (cursor != null) {
+            query.param("time", cursor.utc()).param("cursorId", cursor.id());
+        }
+
+        return query.query((row, index) -> new Visit(map(row, index), instant(row, "created_at")))
+                .list();
+    }
+
+    List<StatusEvent> statusHistory(UUID encounter, HistoryCursor cursor, int limit) {
+        String boundary = cursor == null ? "" : "AND (occurred_at, id) > (:time, :cursorId)";
+        var query = jdbc.sql("""
+                        SELECT id, from_status, to_status, occurred_at
+                        FROM encounter_status_histories WHERE encounter_id = :encounter
+                        """ + boundary + "\nORDER BY occurred_at, id LIMIT :limit")
+                .param("encounter", encounter).param("limit", limit);
+        if (cursor != null) {
+            query.param("time", cursor.utc()).param("cursorId", cursor.id());
+        }
+
+        return query.query((row, index) -> new StatusEvent(row.getObject("id", UUID.class),
+                row.getString("from_status"), row.getString("to_status"),
+                instant(row, "occurred_at"))).list();
+    }
+
+    public record PatientHeader(UUID id, String givenName, String familyName) {
+    }
+
+    public record Visit(EncounterView encounter, Instant createdAt) {
+    }
+
+    public record StatusEvent(UUID id, String fromStatus, String toStatus, Instant occurredAt) {
     }
 
     private JdbcClient.StatementSpec scoped(
