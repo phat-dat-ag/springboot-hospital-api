@@ -79,7 +79,7 @@ public class EncounterReadService {
             doctor = access.requireActiveDoctor(actor);
         }
 
-        var encounter = encounters.find(id, doctor, actor)
+        var encounter = encounters.findDetails(id, doctor, actor)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_NOT_FOUND));
         recordAccess(List.of(encounter), actor, RecordAccessOperation.VIEW, "encounter_workflow_view");
 

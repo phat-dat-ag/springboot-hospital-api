@@ -42,6 +42,7 @@ import org.springframework.validation.annotation.Validated;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -195,6 +196,44 @@ public class ClinicalDocumentationService {
         writeAudit(scope, AuditOperation.SIGN, NOTE_ENTITY, noteId, note.signedAt());
 
         return note;
+    }
+
+    @Transactional
+    public ClinicalDtos.Conclusion updateConclusion(
+            UUID id,
+            @Valid @NotNull ClinicalDtos.UpdateConclusion request,
+            JwtAuthenticationToken authentication
+    ) {
+        String conclusion = safeContent(request.conclusion()).strip();
+
+        if (conclusion.codePoints()
+                .noneMatch(point -> !Character.isWhitespace(point) && !Character.isSpaceChar(point))
+        ) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        Context scope = scope(id, authentication, true);
+
+        try {
+            Instant updatedAt = jdbc.sql("""
+                            UPDATE medical_encounters SET clinical_conclusion = :conclusion
+                            WHERE id = :id AND status = 'in_progress'
+                            RETURNING updated_at
+                            """)
+                    .param("conclusion", conclusion)
+                    .param("id", id)
+                    .query(OffsetDateTime.class)
+                    .optional()
+                    .orElseThrow(() -> new BusinessException(
+                            ErrorCode.CLINICAL_ENCOUNTER_NOT_IN_PROGRESS))
+                    .toInstant();
+
+            writeAudit(scope, AuditOperation.UPDATE, "medical_encounters", id, updatedAt);
+
+            return new ClinicalDtos.Conclusion(conclusion, updatedAt);
+        } catch (DataAccessException failure) {
+            throw new BusinessException(ErrorCode.CLINICAL_DOCUMENTATION_FAILED);
+        }
     }
 
     public Page<DiagnosisRepository.Code> diagnosisCodes(

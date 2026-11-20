@@ -76,8 +76,10 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
             throw rejected(ErrorCode.ENCOUNTER_REASON_REQUIRED);
         }
 
-        UUID doctorId = request.status() == EncounterStatus.IN_PROGRESS
-                ? access.requireActiveDoctor(actor) : null;
+        UUID doctorId = switch (request.status()) {
+            case IN_PROGRESS, COMPLETED -> access.requireActiveDoctor(actor);
+            default -> null;
+        };
 
         try {
             return changeLocked(id, request, actor, doctorId);
@@ -142,6 +144,10 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
             throw rejected(ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED);
         }
 
+        if (request.status() == EncounterStatus.COMPLETED) {
+            requireCompletionEvidence(id, encounter, instant);
+        }
+
         stage("validated", "transition_validation");
         encounter.changeStatus(request.status(), request.reason(), instant);
 
@@ -183,6 +189,36 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
         );
     }
 
+    private void requireCompletionEvidence(
+            UUID id, MedicalEncounter encounter,
+            Instant instant
+    ) {
+        if (encounter.getStartedAt() == null
+                || instant.isBefore(encounter.getStartedAt())
+        ) {
+            throw rejected(ErrorCode.ENCOUNTER_START_REQUIRED);
+        }
+
+        if (!encounters.hasSignedAssessment(id)) {
+            throw rejected(ErrorCode.ENCOUNTER_SIGNED_ASSESSMENT_REQUIRED);
+        }
+
+        if (encounters.countActivePrimaryDiagnoses(id) != 1) {
+            throw rejected(ErrorCode.ENCOUNTER_PRIMARY_DIAGNOSIS_REQUIRED);
+        }
+
+        String conclusion = encounter.getClinicalConclusion();
+
+        if (conclusion == null
+                || conclusion.codePoints().noneMatch(
+                point -> !Character.isWhitespace(point)
+                        && !Character.isSpaceChar(point)
+        )
+        ) {
+            throw rejected(ErrorCode.ENCOUNTER_CONCLUSION_REQUIRED);
+        }
+    }
+
     private void validateDoctor(UUID doctorId, UUID actor, Instant instant) {
         Doctor doctor = doctors.findByIdForUpdate(doctorId)
                 .orElseThrow(() -> rejected(ErrorCode.ENCOUNTER_NOT_FOUND));
@@ -203,7 +239,7 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
 
         switch (target) {
             case ARRIVED, CANCELLED -> EncounterAccess.requireRole(authentication, "ROLE_STAFF");
-            case IN_PROGRESS -> EncounterAccess.requireRole(authentication, "ROLE_DOCTOR");
+            case IN_PROGRESS, COMPLETED -> EncounterAccess.requireRole(authentication, "ROLE_DOCTOR");
             default -> throw rejected(ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED);
         }
     }

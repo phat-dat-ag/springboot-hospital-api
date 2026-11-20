@@ -1,4 +1,4 @@
-﻿# P03 reception and assigned encounter workflow
+# P03 reception and assigned encounter workflow
 
 The synthetic single-clinic workflow uses the existing five-role JWT
 contract and the configurable Asia/Ho_Chi_Minh clinic timezone.
@@ -8,10 +8,10 @@ contract and the configurable Asia/Ho_Chi_Minh clinic timezone.
 | GET /api/v1/hospital/encounters | Clinic-wide | 403 | 403 |
 | GET /api/v1/hospital/encounters/assigned | 403 | Currently assigned visits | 403 |
 | GET /api/v1/hospital/encounters/{id} | Clinic-wide | Currently assigned visit | 403 |
-| PATCH /api/v1/hospital/encounters/{id}/status | Arrival and pre-start cancellation | Start assigned visit | 403 |
+| PATCH /api/v1/hospital/encounters/{id}/status | Arrival and pre-start cancellation | Start and complete an assigned visit when eligible | 403 |
 
 Missing or invalid JWTs receive 401. The [ENC-001 contract](API3-ENCOUNTER-STATUS.md)
-documents allowed transitions and the completion restriction.
+documents allowed transitions and completion prerequisites.
 
 ## Queue filters
 

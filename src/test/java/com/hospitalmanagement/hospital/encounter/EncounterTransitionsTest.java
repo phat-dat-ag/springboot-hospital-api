@@ -17,7 +17,8 @@ class EncounterTransitionsTest {
             "scheduled:arrived",
             "scheduled:cancelled",
             "arrived:in_progress",
-            "arrived:cancelled"
+            "arrived:cancelled",
+            "in_progress:completed"
     );
 
     @ParameterizedTest

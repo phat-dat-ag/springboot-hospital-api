@@ -26,7 +26,8 @@ public class EncounterReadRepository {
                     WHERE h.encounter_id = e.id AND h.to_status = 'arrived'
                     ORDER BY h.occurred_at LIMIT 1) AS arrived_at,
                    CASE WHEN :showReason AND e.status = 'cancelled'
-                        THEN e.cancellation_reason END AS cancellation_reason
+                        THEN e.cancellation_reason END AS cancellation_reason,
+                   CASE WHEN :showConclusion THEN e.clinical_conclusion END AS clinical_conclusion
             FROM medical_encounters e
             JOIN patients p ON p.id = e.patient_id AND p.deleted_at IS NULL
             LEFT JOIN doctors d ON d.id = e.doctor_id
@@ -66,6 +67,13 @@ public class EncounterReadRepository {
 
     public Optional<EncounterView> find(UUID id, UUID doctor, UUID actor) {
         return scoped("AND e.id = :id", doctor, actor, doctor == null)
+                .param("id", id)
+                .query(EncounterReadRepository::map)
+                .optional();
+    }
+
+    public Optional<EncounterView> findDetails(UUID id, UUID doctor, UUID actor) {
+        return scoped("AND e.id = :id", doctor, actor, doctor == null, doctor != null)
                 .param("id", id)
                 .query(EncounterReadRepository::map)
                 .optional();
@@ -134,12 +142,25 @@ public class EncounterReadRepository {
             UUID actor,
             boolean showReason
     ) {
+        return scoped(tail, doctor, actor, showReason, false);
+    }
+
+    private JdbcClient.StatementSpec scoped(
+            String tail,
+            UUID doctor,
+            UUID actor,
+            boolean showReason,
+            boolean showConclusion
+    ) {
         if (doctor == null) {
-            return jdbc.sql(SELECT + tail).param("showReason", showReason);
+            return jdbc.sql(SELECT + tail)
+                    .param("showReason", showReason)
+                    .param("showConclusion", false);
         }
 
         return jdbc.sql(SELECT + DOCTOR_SCOPE + tail)
                 .param("showReason", false)
+                .param("showConclusion", showConclusion)
                 .param("doctor", doctor)
                 .param("actor", actor);
     }
@@ -158,7 +179,8 @@ public class EncounterReadRepository {
                 instant(row, "started_at"),
                 instant(row, "ended_at"),
                 instant(row, "updated_at"),
-                row.getString("cancellation_reason")
+                row.getString("cancellation_reason"),
+                row.getString("clinical_conclusion")
         );
     }
 

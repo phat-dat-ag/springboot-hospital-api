@@ -57,6 +57,7 @@ read-only. SQL is not duplicated under `src/main/resources`.
 | 8 | [V8__attachments_and_audit.sql](../../db/migration/hospital/V8__attachments_and_audit.sql) | 3 attachment/audit tables |
 | 9 | [V9__integrity_guards_and_query_indexes.sql](../../db/migration/hospital/V9__integrity_guards_and_query_indexes.sql) | Immutability, finite values, timestamp triggers and query indexes |
 | 10 | [V10__encounter_registration_idempotency.sql](../../db/migration/hospital/V10__encounter_registration_idempotency.sql) | Actor-scoped registration replay keys and deferred encounter reference |
+| 11 | [V11__encounter_clinical_conclusion.sql](../../db/migration/hospital/V11__encounter_clinical_conclusion.sql) | Nullable medical_encounters.clinical_conclusion varchar(4000), with a nonblank check |
 
 PostgreSQL 17 supplies `gen_random_uuid()` natively, so no extension installation
 or extension privilege is necessary. These are a fresh baseline for the previously
@@ -65,6 +66,11 @@ outside disposable verification databases, preserve these files and add V10+
 for subsequent changes. No baseline-on-migrate, clean, schema reset or seed data.
 
 ## Table overview and timestamp policy
+
+V11 adds one independent conclusion per encounter and leaves existing rows
+unchanged. The existing finalized-encounter trigger protects the column after
+completion. The Java workflow enforces all completion prerequisites while
+holding the encounter lock. No extra table or backfill is needed.
 
 Clinical entity tables use UUID primary keys. The registration key table uses the actor UUID and idempotency key as a composite primary key.
 All foreign keys use NO ACTION on update/delete; there are no cascading deletes.

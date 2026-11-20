@@ -10,11 +10,11 @@ read. The server supplies the event instant.
 | scheduled | cancelled | STAFF |
 | arrived | cancelled | STAFF |
 | arrived | in_progress | Currently assigned DOCTOR |
+| in_progress | completed | Currently assigned DOCTOR with all completion prerequisites |
 
 ADMIN, USER and PATIENT receive 403. STAFF and DOCTOR receive 403 when they
-request an action assigned to the other role. All completion requests fail.
-An admitted caller receives 409 for a recognized but unsupported target,
-including completed. Cancelled, completed and entered-in-error records stay
+request an action assigned to the other role. An admitted caller receives
+409 for an unsupported transition. Cancelled, completed and entered-in-error records stay
 unchanged. Cancellation after examination starts is forbidden.
 
 ~~~http
@@ -29,6 +29,20 @@ To cancel, send status cancelled and a nonblank reason of at most 1,000
 characters. Leading and trailing whitespace are trimmed. To start, send
 expectedStatus arrived and status in_progress with the assigned doctor's
 access token.
+
+To complete, send the following in Swagger with the assigned DOCTOR token.
+The server supplies endedAt.
+
+~~~json
+{"expectedStatus":"in_progress","status":"completed"}
+~~~
+
+Under the encounter lock, completion checks for a valid start time, a signed
+assessment, exactly one active primary diagnosis, and a separate nonblank
+clinical conclusion. Missing clinical prerequisites return 409 with code
+ENCOUNTER_SIGNED_ASSESSMENT_REQUIRED, ENCOUNTER_PRIMARY_DIAGNOSIS_REQUIRED,
+or ENCOUNTER_CONCLUSION_REQUIRED. The first unmet check is returned.
+[Conclusion API and examples](API8-ENCOUNTER-DIAGNOSES.md)
 
 A successful 200 retains the existing APIResponse data fields id, patientId,
 status, startedAt, endedAt and updatedAt. Nullable timestamps are omitted

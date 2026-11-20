@@ -52,6 +52,9 @@ public class MedicalEncounter extends TimestampedEntity {
     @Column(name = "cancellation_reason")
     private String cancellationReason;
 
+    @Column(name = "clinical_conclusion", length = 4000)
+    private String clinicalConclusion;
+
     public void changeStatus(EncounterStatus target, String reason, Instant instant) {
         if (!EncounterTransitions.allows(status, target)) {
             throw new IllegalArgumentException("Unsupported encounter transition");
@@ -61,6 +64,10 @@ public class MedicalEncounter extends TimestampedEntity {
 
         if (target == EncounterStatus.IN_PROGRESS) {
             startedAt = instant;
+        }
+
+        if (target == EncounterStatus.COMPLETED) {
+            endedAt = instant;
         }
 
         if (target == EncounterStatus.CANCELLED) {

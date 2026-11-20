@@ -1,6 +1,7 @@
 package com.hospitalmanagement.hospital.encounter.clinical;
 
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -71,6 +72,17 @@ public final class ClinicalDtos {
             UUID id, UUID authorDoctorId, String type, String status,
             Instant createdAt, Instant updatedAt, Instant signedAt
     ) {
+    }
+
+    public record UpdateConclusion(
+            @NotBlank
+            @Size(max = 4000)
+            @Schema(example = "Kết luận tổng hợp của lần khám thử nghiệm.")
+            String conclusion
+    ) {
+    }
+
+    public record Conclusion(String conclusion, Instant updatedAt) {
     }
 
     public record RecordDiagnosis(

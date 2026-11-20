@@ -9,11 +9,11 @@ import jakarta.validation.constraints.Size;
 
 public record ChangeEncounterStatusRequest(
         @NotNull(message = "Expected status is required")
-        @Schema(example = "scheduled")
+        @Schema(example = "in_progress")
         EncounterStatus expectedStatus,
 
         @NotNull(message = "Target status is required")
-        @Schema(example = "arrived")
+        @Schema(example = "completed")
         EncounterStatus status,
 
         @Size(max = 1000, message = "Reason must not exceed 1000 characters")

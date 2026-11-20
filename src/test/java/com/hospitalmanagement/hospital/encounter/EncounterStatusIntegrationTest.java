@@ -23,10 +23,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -38,6 +40,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -53,6 +56,7 @@ import static org.springframework.security.core.authority.AuthorityUtils.createA
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -131,11 +135,14 @@ class EncounterStatusIntegrationTest {
                 LANGUAGE plpgsql AS $$
                 BEGIN
                     IF (TG_TABLE_NAME = 'encounter_status_histories'
-                        AND NEW.actor_user_id = '00000000-0000-0000-0000-00000000e001'::uuid)
+                        AND NEW.actor_user_id IN (
+                            '00000000-0000-0000-0000-00000000e001'::uuid,
+                            '00000000-0000-0000-0000-00000000e006'::uuid))
                         OR (TG_TABLE_NAME = 'clinical_audit_logs'
                         AND NEW.actor_user_id IN (
                             '00000000-0000-0000-0000-00000000e002'::uuid,
-                            '00000000-0000-0000-0000-00000000e004'::uuid))
+                            '00000000-0000-0000-0000-00000000e004'::uuid,
+                            '00000000-0000-0000-0000-00000000e007'::uuid))
                     THEN
                         RAISE EXCEPTION 'Injected encounter event failure' USING ERRCODE = '23514';
                     END IF;
@@ -390,11 +397,212 @@ class EncounterStatusIntegrationTest {
         );
 
         assertError(
-                ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED,
+                ErrorCode.ENCOUNTER_START_REQUIRED,
                 () -> change(fixture, "in_progress", "completed", null)
         );
         assertNoEvents(fixture);
         assertThat(timestamp(fixture.encounter(), "ended_at")).isNull();
+    }
+
+    @Test
+    void completesOnlyWithIndependentEvidenceAndExposesAuditedClinicalDetail() throws Exception {
+        Fixture visit = fixture("in_progress", true);
+        Fixture other = fixture("in_progress", true);
+        String path = clinicalPath(visit);
+        String conclusion = "Kết luận: đã hoàn thành lần khám thử nghiệm.";
+
+        assertError(ErrorCode.ENCOUNTER_SIGNED_ASSESSMENT_REQUIRED,
+                () -> change(visit, "in_progress", "completed", null));
+        seedSignedAssessment(visit);
+        assertError(ErrorCode.ENCOUNTER_PRIMARY_DIAGNOSIS_REQUIRED,
+                () -> change(visit, "in_progress", "completed", null));
+        seedPrimaryDiagnosis(visit);
+        assertError(ErrorCode.ENCOUNTER_CONCLUSION_REQUIRED,
+                () -> change(visit, "in_progress", "completed", null));
+
+        mvc.perform(put(path + "/conclusion").with(doctor(other))
+                        .contentType(MediaType.APPLICATION_JSON).content(conclusionBody(conclusion)))
+                .andExpect(status().isNotFound());
+        mvc.perform(put(path + "/conclusion").with(jwt().authorities(createAuthorityList("ROLE_STAFF")))
+                        .contentType(MediaType.APPLICATION_JSON).content(conclusionBody(conclusion)))
+                .andExpect(status().isForbidden());
+
+        for (String invalid : List.of("   ", "\u00a0", "x".repeat(4001))) {
+            mvc.perform(put(path + "/conclusion").with(doctor(visit))
+                            .contentType(MediaType.APPLICATION_JSON).content(conclusionBody(invalid)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        mvc.perform(put(path + "/conclusion").with(doctor(visit))
+                        .contentType(MediaType.APPLICATION_JSON).content(conclusionBody("Initial")))
+                .andExpect(status().isOk());
+        mvc.perform(put(path + "/conclusion").with(doctor(visit))
+                        .contentType(MediaType.APPLICATION_JSON).content(conclusionBody(conclusion)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.conclusion").value(conclusion));
+        assertThat(jdbc.queryForObject("SELECT clinical_conclusion FROM medical_encounters WHERE id = ?",
+                String.class, visit.encounter())).isEqualTo(conclusion);
+
+        assertError(ErrorCode.ENCOUNTER_NOT_FOUND, () -> encounters.changeStatus(
+                visit.encounter(), request("in_progress", "completed", null),
+                authentication(other.actor().toString(), "ROLE_DOCTOR")
+        ));
+
+        var completed = change(visit, "in_progress", "completed", null);
+
+        assertThat(completed.endedAt()).isEqualTo(NOW);
+        assertThat(completed.status()).isEqualTo(EncounterStatus.COMPLETED);
+        assertThat(count("encounter_status_histories", "encounter_id", visit.encounter())).isEqualTo(1);
+        assertThat(count("clinical_audit_logs", "entity_id", visit.encounter())).isEqualTo(3);
+        assertError(ErrorCode.ENCOUNTER_STATUS_CONFLICT,
+                () -> change(visit, "in_progress", "completed", null));
+
+        mvc.perform(put(path + "/conclusion").with(doctor(visit))
+                        .contentType(MediaType.APPLICATION_JSON).content(conclusionBody("Late edit")))
+                .andExpect(status().isConflict());
+
+        mvc.perform(get(path).with(doctor(visit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.clinicalConclusion").value(conclusion));
+        mvc.perform(get(path).with(jwt().jwt(token -> token.subject(UUID.randomUUID().toString()))
+                        .authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.clinicalConclusion").doesNotExist());
+        mvc.perform(get("/api/v1/hospital/patients/" + visit.patient() + "/encounters")
+                        .with(doctor(visit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].encounter.id").value(visit.encounter().toString()))
+                .andExpect(jsonPath("$.data.items[0].encounter.clinicalConclusion").doesNotExist());
+    }
+
+    @Test
+    void rollsBackCompletionWhenEitherHistoryOrAuditFails() {
+        for (String suffix : List.of("6", "7")) {
+            UUID actor = UUID.fromString("00000000-0000-0000-0000-00000000e00" + suffix);
+            Fixture visit = fixture("in_progress", true, actor);
+            seedSignedAssessment(visit);
+            seedPrimaryDiagnosis(visit);
+            seedConclusion(visit);
+
+            assertError(ErrorCode.ENCOUNTER_CHANGE_FAILED,
+                    () -> change(visit, "in_progress", "completed", null));
+            assertThat(currentStatus(visit)).isEqualTo("in_progress");
+            assertThat(timestamp(visit.encounter(), "ended_at")).isNull();
+            assertNoEvents(visit);
+        }
+    }
+
+    @Test
+    void preservesTheSingleActivePrimaryDiagnosisConstraint() {
+        Fixture visit = fixture("in_progress", true);
+        seedPrimaryDiagnosis(visit);
+
+        assertThatThrownBy(() -> seedPrimaryDiagnosis(visit))
+                .isInstanceOf(DuplicateKeyException.class);
+    }
+
+    @Test
+    void serializesCompletionWithConclusionUpdates() throws Exception {
+        Fixture visit = fixture("in_progress", true);
+        seedSignedAssessment(visit);
+        seedPrimaryDiagnosis(visit);
+        seedConclusion(visit);
+
+        var outcome = raceCompletion(visit, put(clinicalPath(visit) + "/conclusion")
+                .with(doctor(visit)).contentType(MediaType.APPLICATION_JSON)
+                .content(conclusionBody("Concurrent conclusion")));
+
+        assertThat(outcome.get(0)).isEqualTo(200);
+        assertThat(outcome.get(1)).isIn(200, 409);
+        assertThat(jdbc.queryForObject(
+                "SELECT clinical_conclusion FROM medical_encounters WHERE id = ?",
+                String.class, visit.encounter()
+        )).isEqualTo(outcome.get(1) == 200 ? "Concurrent conclusion" : "Independent conclusion fixture");
+    }
+
+    @Test
+    void checksCommittedDiagnosisAndSignatureWhenTheyRaceWithCompletion() throws Exception {
+        Fixture diagnosisVisit = fixture("in_progress", true);
+        seedSignedAssessment(diagnosisVisit);
+        seedConclusion(diagnosisVisit);
+        var diagnosis = raceCompletion(diagnosisVisit,
+                post(clinicalPath(diagnosisVisit) + "/diagnoses")
+                        .with(doctor(diagnosisVisit)).contentType(MediaType.APPLICATION_JSON)
+                        .content(diagnosisBody(diagnosisCode(true), true)));
+        assertThat(diagnosis.get(1)).isEqualTo(201);
+        assertThat(diagnosis.get(0)).isIn(200, 409);
+        assertThat(currentStatus(diagnosisVisit))
+                .isEqualTo(diagnosis.get(0) == 200 ? "completed" : "in_progress");
+
+        Fixture noteVisit = fixture("in_progress", true);
+        seedPrimaryDiagnosis(noteVisit);
+        seedConclusion(noteVisit);
+        JsonNode draft = createDraft(noteVisit);
+        var signed = raceCompletion(noteVisit,
+                post(clinicalPath(noteVisit) + "/notes/" + draft.path("id").asString() + "/signature")
+                        .with(doctor(noteVisit)).contentType(MediaType.APPLICATION_JSON)
+                        .content(signature(draft.path("revision").asString())));
+        assertThat(signed.get(1)).isEqualTo(200);
+        assertThat(signed.get(0)).isIn(200, 409);
+        assertThat(currentStatus(noteVisit))
+                .isEqualTo(signed.get(0) == 200 ? "completed" : "in_progress");
+    }
+
+    private List<Integer> raceCompletion(
+            Fixture visit,
+            RequestBuilder clinicalWrite
+    ) throws Exception {
+        var start = new CountDownLatch(1);
+        var workers = Executors.newFixedThreadPool(2);
+
+        try {
+            var completion = workers.submit(() -> {
+                start.await();
+
+                return mvc.perform(patch(clinicalPath(visit) + "/status")
+                                .with(doctor(visit)).contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {"expectedStatus":"in_progress","status":"completed"}
+                                        """))
+                        .andReturn().getResponse().getStatus();
+            });
+
+            var write = workers.submit(() -> {
+                start.await();
+                return mvc.perform(clinicalWrite).andReturn().getResponse().getStatus();
+            });
+
+            start.countDown();
+
+            return List.of(completion.get(10, TimeUnit.SECONDS), write.get(10, TimeUnit.SECONDS));
+        } finally {
+            workers.shutdownNow();
+        }
+    }
+
+    private void seedSignedAssessment(Fixture visit) {
+        jdbc.update("""
+                INSERT INTO clinical_notes (encounter_id, author_doctor_id, note_type,
+                    content, status, signed_at)
+                VALUES (?, ?, 'assessment', 'Independent assessment fixture', 'signed', now())
+                """, visit.encounter(), visit.doctor());
+    }
+
+    private void seedPrimaryDiagnosis(Fixture visit) {
+        jdbc.update("""
+                INSERT INTO encounter_diagnoses
+                    (encounter_id, diagnosis_code_id, diagnosing_doctor_id, is_primary)
+                VALUES (?, ?, ?, true)
+                """, visit.encounter(), diagnosisCode(true), visit.doctor());
+    }
+
+    private void seedConclusion(Fixture visit) {
+        jdbc.update("UPDATE medical_encounters SET clinical_conclusion = ? WHERE id = ?",
+                "Independent conclusion fixture", visit.encounter());
+    }
+
+    private static String conclusionBody(String value) {
+        return new JsonMapper().writeValueAsString(Map.of("conclusion", value));
     }
 
     @Test
