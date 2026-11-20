@@ -170,7 +170,9 @@ public class UserSecurityConfig {
                         "/api/v1/hospital/patients/*/encounters",
                         "/api/v1/hospital/patients/*/encounters/",
                         "/api/v1/hospital/encounters/*/status-history",
-                        "/api/v1/hospital/encounters/*/status-history/"
+                        "/api/v1/hospital/encounters/*/status-history/",
+                        "/api/v1/hospital/encounters/*/conclusion",
+                        "/api/v1/hospital/encounters/*/conclusion/"
                 ).hasRole("DOCTOR")
 
                 .requestMatchers(
