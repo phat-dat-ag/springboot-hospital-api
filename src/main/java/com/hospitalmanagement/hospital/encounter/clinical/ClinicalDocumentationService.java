@@ -60,6 +60,7 @@ public class ClinicalDocumentationService {
     private final DoctorRepository doctors;
     private final PatientRepository patients;
     private final ClinicalDocumentationRepository documentation;
+    private final DiagnosisRepository diagnoses;
     private final ClinicalAuditLogRepository writes;
     private final MedicalRecordAccessLogRepository reads;
     private final JdbcClient jdbc;
@@ -182,6 +183,106 @@ public class ClinicalDocumentationService {
         writeAudit(scope, AuditOperation.SIGN, NOTE_ENTITY, noteId, note.signedAt());
 
         return note;
+    }
+
+    public Page<DiagnosisRepository.Code> diagnosisCodes(
+            String query,
+            int page,
+            int size,
+            JwtAuthenticationToken authentication
+    ) {
+        UUID actor = EncounterAccess.actorId(authentication);
+
+        EncounterAccess.requireRole(authentication, "ROLE_DOCTOR");
+
+        if (query == null || query.length() > 100 || query.indexOf(0) >= 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST);
+        }
+
+        long offset = offset(page, size);
+
+        access.requireActiveDoctor(actor);
+
+        return page(diagnoses.codes(query.strip(), offset, size + 1), page, size);
+    }
+
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public Page<DiagnosisRepository.Diagnosis> diagnoses(
+            UUID id,
+            int page,
+            int size,
+            JwtAuthenticationToken authentication
+    ) {
+        long offset = offset(page, size);
+
+        Context scope = scope(id, authentication, false);
+
+        var rows = diagnoses.diagnoses(id, offset, size + 1);
+
+        readAudit(
+                scope,
+                RecordAccessOperation.SEARCH,
+                "medical_encounters",
+                id,
+                "encounter_diagnoses"
+        );
+
+        return page(rows, page, size);
+    }
+
+    @Transactional
+    public DiagnosisRepository.Diagnosis recordDiagnosis(
+            UUID id,
+
+            @Valid
+            @NotNull
+            ClinicalDtos.RecordDiagnosis request,
+
+            JwtAuthenticationToken authentication
+    ) {
+        Context scope = scope(id, authentication, true);
+
+        String description = request.clinicalDescription() == null
+                ? null
+                : safeContent(request.clinicalDescription()).strip();
+        try {
+            var code = diagnoses.activeCodeForShare(request.diagnosisCodeId())
+                    .orElseThrow(
+                            () -> new BusinessException(
+                                    ErrorCode.DIAGNOSIS_CODE_NOT_FOUND
+                            )
+                    );
+            var diagnosis = diagnoses.insert(
+                            id,
+                            scope.doctor(),
+                            code,
+                            request.primary(),
+                            description == null || description.isEmpty()
+                                    ? null
+                                    : description
+                    )
+                    .orElseThrow(
+                            () -> new BusinessException(
+                                    ErrorCode.ENCOUNTER_DIAGNOSIS_CONFLICT
+                            )
+                    );
+
+            diagnoses.recordHistory(diagnosis, scope.actor());
+
+            writeAudit(
+                    scope,
+                    AuditOperation.CREATE,
+                    "encounter_diagnoses",
+                    diagnosis.id(),
+                    diagnosis.diagnosedAt()
+            );
+
+            return diagnosis;
+        } catch (PessimisticLockingFailureException failure) {
+            throw new BusinessException(ErrorCode.ENCOUNTER_LOCK_CONFLICT);
+        } catch (DataAccessException failure) {
+            throw new BusinessException(ErrorCode.CLINICAL_DOCUMENTATION_FAILED);
+        }
     }
 
     private void requireDraft(Context scope, UUID encounter, UUID noteId, String revision) {

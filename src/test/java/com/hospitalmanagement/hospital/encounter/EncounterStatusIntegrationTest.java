@@ -617,6 +617,85 @@ class EncounterStatusIntegrationTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("CLINICAL_DOCUMENTATION_FAILED"));
         assertThat(count("clinical_notes", "encounter_id", fixture.encounter())).isZero();
+
+        UUID code = diagnosisCode(true);
+
+        mvc.perform(post(clinicalPath(fixture) + "/diagnoses")
+                        .with(doctor(fixture))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(diagnosisBody(code, true))
+                )
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("CLINICAL_DOCUMENTATION_FAILED"));
+
+        assertThat(count("encounter_diagnoses", "encounter_id", fixture.encounter())).isZero();
+        assertThat(count("diagnosis_histories", "actor_user_id", fixture.actor())).isZero();
+    }
+
+    @Test
+    void searchesActiveCodesAndRecordsOneAuditedPrimaryDiagnosisForTheAssignedDoctor()
+            throws Exception {
+        Fixture visit = fixture("in_progress", true);
+        Fixture other = fixture("in_progress", true);
+
+        UUID code = diagnosisCode(true);
+        UUID inactive = diagnosisCode(false);
+
+        String catalog = "/api/v1/hospital/diagnosis-codes";
+        String endpoint = clinicalPath(visit) + "/diagnoses";
+
+        mvc.perform(get(catalog).with(doctor(visit)).param("q", code.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].id").value(code.toString()));
+        mvc.perform(get(catalog).with(doctor(visit)).param("q", inactive.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty());
+        mvc.perform(get(catalog)).andExpect(status().isUnauthorized());
+        mvc.perform(get(endpoint).with(jwt().authorities(createAuthorityList("ROLE_STAFF"))))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(endpoint).with(doctor(other))).andExpect(status().isNotFound());
+
+        mvc.perform(post(endpoint).with(doctor(visit)).contentType(MediaType.APPLICATION_JSON)
+                        .content(diagnosisBody(inactive, true)))
+                .andExpect(status().isNotFound());
+        mvc.perform(post(endpoint).with(doctor(visit)).contentType(MediaType.APPLICATION_JSON)
+                        .content(diagnosisBody(code, true)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.diagnosingDoctorId").value(visit.doctor().toString()))
+                .andExpect(jsonPath("$.data.primary").value(true));
+        mvc.perform(post(endpoint).with(doctor(visit)).contentType(MediaType.APPLICATION_JSON)
+                        .content(diagnosisBody(code, false)))
+                .andExpect(status().isConflict());
+        mvc.perform(post(endpoint).with(doctor(visit)).contentType(MediaType.APPLICATION_JSON)
+                        .content(diagnosisBody(diagnosisCode(true), true)))
+                .andExpect(status().isConflict());
+        mvc.perform(get(endpoint).with(doctor(visit)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].code.id").value(code.toString()));
+
+        assertThat(count("encounter_diagnoses", "encounter_id", visit.encounter())).isEqualTo(1);
+        assertThat(count("diagnosis_histories", "actor_user_id", visit.actor())).isEqualTo(1);
+        assertThat(count("clinical_audit_logs", "actor_user_id", visit.actor())).isEqualTo(1);
+        assertThat(count("medical_record_access_logs", "actor_user_id", visit.actor())).isEqualTo(1);
+    }
+
+    private UUID diagnosisCode(boolean active) {
+        UUID id = UUID.randomUUID();
+
+        jdbc.update("""
+                INSERT INTO diagnosis_codes (id, coding_system, system_version, code,
+                    description, is_active) VALUES (?, 'SYNTHETIC', '1', ?, 'Test code', ?)
+                """, id, id.toString(), active);
+
+        return id;
+    }
+
+    private static String diagnosisBody(UUID code, boolean primary) {
+        return """
+                {"diagnosisCodeId":"%s","primary":%s,"clinicalDescription":"Synthetic diagnosis"}
+                """.formatted(code, primary);
     }
 
     @Test

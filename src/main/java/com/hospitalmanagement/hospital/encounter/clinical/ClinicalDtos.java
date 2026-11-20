@@ -73,6 +73,17 @@ public final class ClinicalDtos {
     ) {
     }
 
+    public record RecordDiagnosis(
+            @NotNull
+            UUID diagnosisCodeId,
+
+            boolean primary,
+
+            @Size(max = 2000)
+            String clinicalDescription
+    ) {
+    }
+
     public record Page<T>(List<T> items, int page, int size, boolean hasNext) {
     }
 }

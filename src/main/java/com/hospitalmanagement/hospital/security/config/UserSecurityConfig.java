@@ -162,7 +162,11 @@ public class UserSecurityConfig {
                         "/api/v1/hospital/encounters/*/vitals",
                         "/api/v1/hospital/encounters/*/vitals/",
                         "/api/v1/hospital/encounters/*/notes",
-                        "/api/v1/hospital/encounters/*/notes/**"
+                        "/api/v1/hospital/encounters/*/notes/**",
+                        "/api/v1/hospital/diagnosis-codes",
+                        "/api/v1/hospital/diagnosis-codes/",
+                        "/api/v1/hospital/encounters/*/diagnoses",
+                        "/api/v1/hospital/encounters/*/diagnoses/"
                 ).hasRole("DOCTOR")
 
                 .requestMatchers(
