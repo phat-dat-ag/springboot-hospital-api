@@ -64,7 +64,7 @@ class ClinicalSchemaMigrationTest {
                 .baselineOnMigrate(false)
                 .load();
 
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(10);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(11);
     }
 
     @Test
@@ -154,7 +154,7 @@ class ClinicalSchemaMigrationTest {
 
     @Test
     @EnabledIfEnvironmentVariable(named = "CLINICAL_UPGRADE_JDBC_URL", matches = ".+")
-    void upgradesAnExistingVersionNineSchema() {
+    void upgradesAnExistingVersionTenSchema() {
         String url = requiredEnvironment("CLINICAL_UPGRADE_JDBC_URL");
 
         assertThat(url).matches("jdbc:postgresql://[^/]+/clinical_upgrade_test(?:\\?.*)?");
@@ -169,9 +169,9 @@ class ClinicalSchemaMigrationTest {
                 .defaultSchema("public")
                 .cleanDisabled(true)
                 .baselineOnMigrate(false);
-        assertThat(configuration.target("9").load().migrate().migrationsExecuted).isEqualTo(9);
+        assertThat(configuration.target("10").load().migrate().migrationsExecuted).isEqualTo(10);
 
-        Flyway upgraded = configuration.target("10").load();
+        Flyway upgraded = configuration.target("11").load();
         assertThat(upgraded.migrate().migrationsExecuted).isEqualTo(1);
         assertThat(upgraded.validateWithResult().validationSuccessful).isTrue();
     }

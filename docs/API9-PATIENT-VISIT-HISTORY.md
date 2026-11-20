@@ -35,12 +35,17 @@ nextCursor indicates the last page. Scope is checked on every request.
 
 Use the existing encounter detail, vitals, notes, and diagnoses routes for
 a selected visit. The GET notes list and detail expose signed notes only on
-completed encounters. Clinical fields stay on their separately audited routes.
+completed encounters. For a selected visit, use GET
+/api/v1/hospital/encounters/{id} with the assigned DOCTOR token to read the
+optional data.clinicalConclusion. The list and STAFF workflow reads omit it.
+The signed assessment remains on the notes route. Older completed visits may
+have no conclusion. Both the visit list and detail are audited.
 
 The patient header and each disclosed visit receive access audit records,
 including the header when a valid page has no items. Status history audits
 the encounter read. Required audit failures withhold the response.
 
-No migration is needed. The slice works with existing completed encounters,
-including authorized synthetic fixtures. Creating new completed visits
-through ENC-001 still depends on approval of the P05 completion rules.
+In Swagger, complete a visit through [ENC-001](API3-ENCOUNTER-STATUS.md).
+Call GET /api/v1/hospital/patients/{id}/encounters?size=20 with the patient
+UUID. Select the returned items[].encounter.id and open the detail GET.
+The new completed visit is eligible for the list as soon as completion commits.

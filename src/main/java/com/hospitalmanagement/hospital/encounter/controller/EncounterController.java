@@ -36,7 +36,8 @@ public class EncounterController extends BaseController {
     @Operation(
             summary = "Change encounter status",
             description = "STAFF records arrival or cancellation. The assigned DOCTOR starts "
-                    + "examination. Completion is unavailable. Changes and audit are atomic."
+                    + "examination and completes it after signing an assessment, recording an "
+                    + "active primary diagnosis, and writing a separate conclusion."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status changed"),
@@ -44,7 +45,10 @@ public class EncounterController extends BaseController {
             @ApiResponse(responseCode = "401", description = "Invalid or missing authentication"),
             @ApiResponse(responseCode = "403", description = "Action requires an authorized actor"),
             @ApiResponse(responseCode = "404", description = "Encounter not found"),
-            @ApiResponse(responseCode = "409", description = "Status, workflow or lock conflict"),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Status, lock or missing completion prerequisite conflict"
+            ),
             @ApiResponse(responseCode = "500", description = "Status change could not be recorded"),
             @ApiResponse(responseCode = "502", description = "Invalid account verification response"),
             @ApiResponse(responseCode = "503", description = "Account verification unavailable")

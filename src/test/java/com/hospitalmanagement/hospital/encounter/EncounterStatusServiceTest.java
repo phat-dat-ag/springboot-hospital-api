@@ -295,15 +295,16 @@ class EncounterStatusServiceTest {
     }
 
     @Test
-    void blocksCompletionForAdmittedRolesAndAdmin() {
+    void requiresCompletionEvidenceAndRejectsReceptionAndAdmin() {
         given(encounter.getStatus()).willReturn(EncounterStatus.IN_PROGRESS);
+        given(encounter.getStartedAt()).willReturn(NOW);
 
         var complete = new ChangeEncounterStatusRequest(
                 EncounterStatus.IN_PROGRESS, EncounterStatus.COMPLETED, null
         );
 
         assertError(
-                ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED,
+                ErrorCode.ENCOUNTER_SIGNED_ASSESSMENT_REQUIRED,
                 () -> service.changeStatus(ID, complete, authentication(ACTOR, "ROLE_DOCTOR"))
         );
 
@@ -312,8 +313,8 @@ class EncounterStatusServiceTest {
         ));
 
         assertError(
-                ErrorCode.ENCOUNTER_TRANSITION_NOT_ALLOWED,
-                () -> service.changeStatus(ID, complete, authentication(ACTOR, "ROLE_DOCTOR"))
+                ErrorCode.ENCOUNTER_ACCESS_DENIED,
+                () -> service.changeStatus(ID, complete, authentication(ACTOR, "ROLE_STAFF"))
         );
 
         verifyNoInteractions(histories, audits);

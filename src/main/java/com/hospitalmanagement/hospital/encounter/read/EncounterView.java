@@ -16,6 +16,7 @@ public record EncounterView(
         Instant startedAt,
         Instant endedAt,
         Instant updatedAt,
-        String cancellationReason
+        String cancellationReason,
+        String clinicalConclusion
 ) {
 }

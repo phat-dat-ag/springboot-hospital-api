@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -148,6 +149,18 @@ public class ClinicalDocumentationController extends BaseController {
                 documentation.sign(id, noteId, request, authentication),
                 response(HttpStatus.OK)
         );
+    }
+
+    @PutMapping("/conclusion")
+    @Operation(summary = "Set the assigned encounter's independent clinical conclusion")
+    @ApiResponse(responseCode = "200", description = "Conclusion stored")
+    public ResponseEntity<@NonNull APIResponse<ClinicalDtos.Conclusion>> conclusion(
+            @PathVariable UUID id,
+            @Valid @RequestBody ClinicalDtos.UpdateConclusion request,
+            JwtAuthenticationToken authentication
+    ) {
+        return success(documentation.updateConclusion(id, request, authentication),
+                response(HttpStatus.OK));
     }
 
     private static ResponseEntity.BodyBuilder response(HttpStatus status) {
