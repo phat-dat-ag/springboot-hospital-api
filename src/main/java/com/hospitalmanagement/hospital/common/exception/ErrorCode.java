@@ -44,6 +44,8 @@ public enum ErrorCode {
 
     ENCOUNTER_NOT_FOUND(HttpStatus.NOT_FOUND, "Encounter not found"),
     CLINICAL_NOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "Clinical note not found"),
+    DIAGNOSIS_CODE_NOT_FOUND(HttpStatus.NOT_FOUND, "Active diagnosis code not found"),
+    ENCOUNTER_DIAGNOSIS_CONFLICT(HttpStatus.CONFLICT, "Active diagnosis code or primary already exists"),
     CLINICAL_NOTE_CONFLICT(HttpStatus.CONFLICT, "The note is no longer the requested draft"),
     CLINICAL_ENCOUNTER_NOT_IN_PROGRESS(HttpStatus.CONFLICT, "Examination is not in progress"),
     CLINICAL_DOCUMENTATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "Clinical documentation could not be recorded"),
