@@ -49,7 +49,7 @@ public class UserServiceClient {
         ));
     }
 
-    public AccountIdentity getAccountIdentity(UUID userId) {
+    public AccountIdentity getAccountWithValidRole(UUID userId) {
         UserAccount user = lookupUser(userId, true);
         JsonNode role = user.role();
 
@@ -65,10 +65,14 @@ public class UserServiceClient {
                     .addKeyValue("event", "dependency.user.invalid_identity")
                     .log("User Service returned incomplete or invalid account identity");
 
-            throw new BusinessException(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE);
+            throw new BusinessException(ErrorCode.USER_INVALID_ROLE);
         }
 
-        return new AccountIdentity(user.id(), user.isActivated().asBoolean(), role.intValue());
+        return new AccountIdentity(
+                user.id(),
+                user.isActivated().asBoolean(),
+                role.intValue()
+        );
     }
 
     private UserAccount lookupUser(UUID userId, boolean forEligibility) {
@@ -98,8 +102,8 @@ public class UserServiceClient {
             );
 
             ErrorCode error = restClientException instanceof ResourceAccessException
-                    ? ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE
-                    : ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE;
+                    ? ErrorCode.USER_UNAVAILABLE
+                    : ErrorCode.USER_INVALID_ROLE;
 
             throw new BusinessException(
                     forEligibility
@@ -118,7 +122,7 @@ public class UserServiceClient {
 
             throw new BusinessException(
                     forEligibility
-                            ? ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE
+                            ? ErrorCode.USER_INVALID_ROLE
                             : ErrorCode.INTERNAL_SERVER_ERROR
             );
         }
@@ -132,16 +136,16 @@ public class UserServiceClient {
                 JsonNode body = exception.getResponseBodyAs(JsonNode.class);
 
                 if (body != null && "USER_NOT_FOUND".equals(body.path("code").asString())) {
-                    return ErrorCode.DOCTOR_ACCOUNT_NOT_FOUND;
+                    return ErrorCode.USER_NOT_FOUND;
                 }
             } catch (RuntimeException unreadable) {
-                return ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE;
+                return ErrorCode.USER_INVALID_ROLE;
             }
 
-            return ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE;
+            return ErrorCode.USER_INVALID_ROLE;
         }
 
-        return ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE;
+        return ErrorCode.USER_UNAVAILABLE;
     }
 
     public record AccountIdentity(

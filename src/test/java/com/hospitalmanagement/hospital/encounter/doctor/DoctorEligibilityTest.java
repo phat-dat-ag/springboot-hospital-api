@@ -29,7 +29,7 @@ class DoctorEligibilityTest {
         var entered = new CountDownLatch(8);
         var release = new CountDownLatch(1);
 
-        given(client.getAccountIdentity(account)).willAnswer(invocation -> {
+        given(client.getAccountWithValidRole(account)).willAnswer(invocation -> {
             entered.countDown();
             assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
 
@@ -41,15 +41,15 @@ class DoctorEligibilityTest {
 
         try {
             for (int lookup = 0; lookup < 8; lookup++) {
-                pending.add(executor.submit(() -> eligibility.requireEligibleAccount(account)));
+                pending.add(executor.submit(() -> eligibility.requiresEligibleDoctorAccount(account)));
             }
 
             assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
-            assertThatThrownBy(() -> eligibility.requireEligibleAccount(account))
+            assertThatThrownBy(() -> eligibility.requiresEligibleDoctorAccount(account))
                     .isInstanceOfSatisfying(BusinessException.class, failure ->
                             assertThat(failure.getErrorCode())
                                     .isEqualTo(ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE));
-            verify(client, times(8)).getAccountIdentity(account);
+            verify(client, times(8)).getAccountWithValidRole(account);
 
             release.countDown();
 
@@ -57,8 +57,8 @@ class DoctorEligibilityTest {
                 verification.get(10, TimeUnit.SECONDS);
             }
 
-            eligibility.requireEligibleAccount(account);
-            verify(client, times(9)).getAccountIdentity(account);
+            eligibility.requiresEligibleDoctorAccount(account);
+            verify(client, times(9)).getAccountWithValidRole(account);
         } finally {
             release.countDown();
             executor.shutdownNow();

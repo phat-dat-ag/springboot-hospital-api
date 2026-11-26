@@ -93,7 +93,7 @@ public class EncounterRegistrationStore {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
         LocalDate today = LocalDate.now(clinicClock);
-        eligibility.requireEligibleProfile(doctor, today);
+        eligibility.requiresEligibleDoctorProfile(doctor, today);
 
         if (!verifiedAccount.equals(doctor.getExternalUserId())) {
             throw new BusinessException(ErrorCode.ENCOUNTER_DOCTOR_UNAVAILABLE);

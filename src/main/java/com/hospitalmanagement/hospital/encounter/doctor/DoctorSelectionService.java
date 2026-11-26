@@ -27,7 +27,7 @@ public class DoctorSelectionService {
         while (evaluated < Math.min(window.size(), CANDIDATE_LIMIT) && items.size() < size) {
             var candidate = window.get(evaluated++);
 
-            if (eligibility.isEligibleAccount(candidate.accountId())) {
+            if (eligibility.hasEligibleDoctorAccount(candidate.accountId())) {
                 items.add(new Item(candidate.id(), candidate.displayName(), candidate.specialty()));
             }
         }

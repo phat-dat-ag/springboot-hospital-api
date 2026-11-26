@@ -52,7 +52,7 @@ public class EncounterAccess {
         UUID doctor = doctors.findActiveIdByAccount(actor)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ENCOUNTER_ACCESS_DENIED));
 
-        if (!eligibility.isEligibleAccount(actor)) {
+        if (!eligibility.hasEligibleDoctorAccount(actor)) {
             throw new BusinessException(ErrorCode.ENCOUNTER_ACCESS_DENIED);
         }
 

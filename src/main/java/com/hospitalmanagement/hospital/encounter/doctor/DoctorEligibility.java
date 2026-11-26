@@ -18,16 +18,16 @@ public class DoctorEligibility {
     private static final int DOCTOR_ROLE = 4;
     private static final int MAX_CONCURRENT_LOOKUPS = 8;
 
-    private final UserServiceClient accounts;
+    private final UserServiceClient userServiceClient;
     private final Semaphore lookups = new Semaphore(MAX_CONCURRENT_LOOKUPS);
 
-    public void requireEligibleAccount(UUID accountId) {
+    public void requiresEligibleDoctorAccount(UUID accountId) {
         if (!lookups.tryAcquire()) {
             throw new BusinessException(ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE);
         }
 
         try {
-            var account = accounts.getAccountIdentity(accountId);
+            var account = userServiceClient.getAccountWithValidRole(accountId);
 
             if (!account.isActivated()) {
                 throw new BusinessException(ErrorCode.DOCTOR_ACCOUNT_INACTIVE);
@@ -41,20 +41,23 @@ public class DoctorEligibility {
         }
     }
 
-    public boolean isEligibleAccount(UUID accountId) {
+    public boolean hasEligibleDoctorAccount(UUID accountId) {
         try {
-            requireEligibleAccount(accountId);
+            requiresEligibleDoctorAccount(accountId);
+
             return true;
-        } catch (BusinessException failure) {
-            return switch (failure.getErrorCode()) {
-                case DOCTOR_ACCOUNT_NOT_FOUND, DOCTOR_ACCOUNT_INACTIVE,
-                     DOCTOR_ACCOUNT_ROLE_INVALID -> false;
-                default -> throw failure;
+        } catch (BusinessException exception) {
+            return switch (exception.getErrorCode()) {
+                case DOCTOR_ACCOUNT_NOT_FOUND,
+                     DOCTOR_ACCOUNT_INACTIVE,
+                     DOCTOR_ACCOUNT_ROLE_INVALID
+                        -> false;
+                default -> throw exception;
             };
         }
     }
 
-    public void requireEligibleProfile(Doctor doctor, LocalDate date) {
+    public void requiresEligibleDoctorProfile(Doctor doctor, LocalDate date) {
         if (doctor.getDeletedAt() != null
                 || doctor.getExternalUserId() == null
                 || (doctor.getLicenseExpiresOn() != null

@@ -110,7 +110,7 @@ class OutpatientRegistrationIntegrationTest {
         for (int number = 1; number <= 20; number++) {
             UUID account = UUID.randomUUID();
             doctor(new UUID(group, number), account, name, null);
-            given(accounts.getAccountIdentity(account))
+            given(accounts.getAccountWithValidRole(account))
                     .willReturn(new UserServiceClient.AccountIdentity(account, false, 4));
         }
 
@@ -151,7 +151,7 @@ class OutpatientRegistrationIntegrationTest {
         var request = get(DOCTORS).header("Authorization", bearer(3, UUID.randomUUID()))
                 .param("name", name);
 
-        given(accounts.getAccountIdentity(account)).willThrow(
+        given(accounts.getAccountWithValidRole(account)).willThrow(
                 new BusinessException(ErrorCode.DOCTOR_ACCOUNT_NOT_FOUND),
                 new BusinessException(ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE),
                 new BusinessException(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE)
@@ -202,7 +202,7 @@ class OutpatientRegistrationIntegrationTest {
                 .andExpect(jsonPath("$.code").value("ENCOUNTER_SCHEDULE_INVALID"));
         verifyNoInteractions(accounts);
 
-        given(accounts.getAccountIdentity(account))
+        given(accounts.getAccountWithValidRole(account))
                 .willReturn(new UserServiceClient.AccountIdentity(account, true, 3));
         mvc.perform(request.content(body(patient, doctor, "Routine")))
                 .andExpect(status().isConflict())
@@ -434,7 +434,7 @@ class OutpatientRegistrationIntegrationTest {
 
     private UUID eligibleAccount() {
         UUID account = UUID.randomUUID();
-        given(accounts.getAccountIdentity(account))
+        given(accounts.getAccountWithValidRole(account))
                 .willReturn(new UserServiceClient.AccountIdentity(account, true, 4));
         return account;
     }

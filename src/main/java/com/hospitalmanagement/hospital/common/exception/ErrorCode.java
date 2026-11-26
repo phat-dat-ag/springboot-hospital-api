@@ -64,6 +64,10 @@ public enum ErrorCode {
     ENCOUNTER_OPEN_VISIT(HttpStatus.CONFLICT, "An open visit exists for that clinic day"),
     ENCOUNTER_SCHEDULE_INVALID(HttpStatus.BAD_REQUEST, "Schedule is outside the supported clinic dates"),
 
+    USER_INVALID_ROLE(HttpStatus.BAD_REQUEST, "User with invalid role"),
+    USER_UNAVAILABLE(HttpStatus.NOT_FOUND, "User is unavailable"),
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "User not found"),
+
     DOCTOR_ACCOUNT_NOT_FOUND(HttpStatus.CONFLICT, "Linked doctor account does not exist"),
     DOCTOR_ACCOUNT_INACTIVE(HttpStatus.CONFLICT, "Linked doctor account is inactive"),
     DOCTOR_ACCOUNT_ROLE_INVALID(HttpStatus.CONFLICT, "Linked account does not have the doctor role"),

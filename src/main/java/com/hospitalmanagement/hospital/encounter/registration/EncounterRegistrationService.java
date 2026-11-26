@@ -55,8 +55,8 @@ public class EncounterRegistrationService {
 
             var doctor = doctors.findById(command.doctorId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-            eligibility.requireEligibleProfile(doctor, today);
-            eligibility.requireEligibleAccount(doctor.getExternalUserId());
+            eligibility.requiresEligibleDoctorProfile(doctor, today);
+            eligibility.requiresEligibleDoctorAccount(doctor.getExternalUserId());
 
             Result result = store.register(
                     command, digest, doctor.getExternalUserId(), scheduled
