@@ -65,6 +65,7 @@ public enum ErrorCode {
     ENCOUNTER_SCHEDULE_INVALID(HttpStatus.BAD_REQUEST, "Schedule is outside the supported clinic dates"),
 
     USER_INVALID_ROLE(HttpStatus.BAD_REQUEST, "User with invalid role"),
+    USER_INVALID_RESPONSE(HttpStatus.BAD_REQUEST, "User response is invalid"),
     USER_UNAVAILABLE(HttpStatus.NOT_FOUND, "User is unavailable"),
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "User not found"),
 

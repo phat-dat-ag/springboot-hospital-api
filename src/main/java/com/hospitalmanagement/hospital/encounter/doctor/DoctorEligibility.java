@@ -1,6 +1,7 @@
 package com.hospitalmanagement.hospital.encounter.doctor;
 
 import com.hospitalmanagement.hospital.client.UserServiceClient;
+import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.encounter.entity.Doctor;
@@ -15,7 +16,6 @@ import java.util.concurrent.Semaphore;
 @Service
 @RequiredArgsConstructor
 public class DoctorEligibility {
-    private static final int DOCTOR_ROLE = 4;
     private static final int MAX_CONCURRENT_LOOKUPS = 8;
 
     private final UserServiceClient userServiceClient;
@@ -33,7 +33,7 @@ public class DoctorEligibility {
                 throw new BusinessException(ErrorCode.DOCTOR_ACCOUNT_INACTIVE);
             }
 
-            if (account.role() != DOCTOR_ROLE) {
+            if (account.role() != UserRoles.DOCTOR.getValue()) {
                 throw new BusinessException(ErrorCode.DOCTOR_ACCOUNT_ROLE_INVALID);
             }
         } finally {
@@ -50,8 +50,7 @@ public class DoctorEligibility {
             return switch (exception.getErrorCode()) {
                 case DOCTOR_ACCOUNT_NOT_FOUND,
                      DOCTOR_ACCOUNT_INACTIVE,
-                     DOCTOR_ACCOUNT_ROLE_INVALID
-                        -> false;
+                     DOCTOR_ACCOUNT_ROLE_INVALID -> false;
                 default -> throw exception;
             };
         }

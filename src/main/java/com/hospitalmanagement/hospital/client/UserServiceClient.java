@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.client;
 
+import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
@@ -9,7 +10,6 @@ import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
@@ -36,7 +36,7 @@ public class UserServiceClient {
     }
 
     public UserIntegrationResponse getUser(UUID userId) {
-        UserAccount user = lookupUser(userId, false);
+        UserAccount user = lookupUser(userId);
 
         return new UserIntegrationResponse(new UserIntegrationDTO(
                 user.id(),
@@ -51,14 +51,13 @@ public class UserServiceClient {
     }
 
     public AccountIdentity getAccountWithValidRole(UUID userId) {
-        UserAccount user = lookupUser(userId, true);
+        UserAccount user = lookupUser(userId);
         JsonNode role = user.role();
 
         if (role == null
                 || !role.isIntegralNumber()
                 || !role.canConvertToInt()
-                || role.intValue() < 1
-                || role.intValue() > 5
+                || !UserRoles.ROLE_VALUES.contains(role.intValue())
                 || user.isActivated() == null
                 || !user.isActivated().isBoolean()
         ) {
@@ -76,7 +75,7 @@ public class UserServiceClient {
         );
     }
 
-    private UserAccount lookupUser(UUID userId, boolean forEligibility) {
+    private UserAccount lookupUser(UUID userId) {
         UserLookupResponse response;
 
         try {
@@ -91,62 +90,26 @@ public class UserServiceClient {
                     restClientResponseException.getMessage()
             );
 
-            throw new BusinessException(
-                    forEligibility
-                            ? accountLookupError(restClientResponseException)
-                            : ErrorCode.INTERNAL_SERVER_ERROR
-            );
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         } catch (RestClientException restClientException) {
             log.warn(
                     "User Service request failed, RestClientException={}",
                     restClientException.getMessage()
             );
 
-            ErrorCode error = restClientException instanceof ResourceAccessException
-                    ? ErrorCode.USER_UNAVAILABLE
-                    : ErrorCode.USER_INVALID_ROLE;
-
-            throw new BusinessException(
-                    forEligibility
-                            ? error
-                            : ErrorCode.INTERNAL_SERVER_ERROR
-            );
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
 
         if (response == null
                 || response.user() == null
                 || !userId.equals(response.user().id())
         ) {
-            log.atWarn()
-                    .addKeyValue("event", "dependency.user.invalid_response")
-                    .log("User Service returned an invalid user response");
+            log.warn("User Service returned an invalid user response");
 
-            throw new BusinessException(
-                    forEligibility
-                            ? ErrorCode.USER_INVALID_ROLE
-                            : ErrorCode.INTERNAL_SERVER_ERROR
-            );
+            throw new BusinessException(ErrorCode.USER_INVALID_RESPONSE);
         }
 
         return response.user();
-    }
-
-    private ErrorCode accountLookupError(RestClientResponseException exception) {
-        if (exception.getStatusCode().value() == 404) {
-            try {
-                JsonNode body = exception.getResponseBodyAs(JsonNode.class);
-
-                if (body != null && "USER_NOT_FOUND".equals(body.path("code").asString())) {
-                    return ErrorCode.USER_NOT_FOUND;
-                }
-            } catch (RuntimeException unreadable) {
-                return ErrorCode.USER_INVALID_ROLE;
-            }
-
-            return ErrorCode.USER_INVALID_ROLE;
-        }
-
-        return ErrorCode.USER_UNAVAILABLE;
     }
 
     public record AccountIdentity(
