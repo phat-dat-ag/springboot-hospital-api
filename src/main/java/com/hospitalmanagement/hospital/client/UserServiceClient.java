@@ -41,6 +41,7 @@ public class UserServiceClient {
         return new UserIntegrationResponse(new UserIntegrationDTO(
                 user.id(),
                 user.username(),
+                user.role.intValue(),
                 user.email(),
                 user.isActivated() != null
                         && user.isActivated().asBoolean(false),
