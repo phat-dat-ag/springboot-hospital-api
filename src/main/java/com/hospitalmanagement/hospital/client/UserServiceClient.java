@@ -35,21 +35,22 @@ public class UserServiceClient {
         this.properties = properties;
     }
 
-    public UserIntegrationResponse getUser(UUID uuid) {
-        UserAccount user = lookup(uuid, false);
+    public UserIntegrationResponse getUser(UUID userId) {
+        UserAccount user = lookupUser(userId, false);
 
         return new UserIntegrationResponse(new UserIntegrationDTO(
                 user.id(),
                 user.username(),
                 user.email(),
-                user.isActivated() != null && user.isActivated().asBoolean(false),
+                user.isActivated() != null
+                        && user.isActivated().asBoolean(false),
                 user.createdAt(),
                 user.updatedAt()
         ));
     }
 
-    public AccountIdentity getAccountIdentity(UUID uuid) {
-        UserAccount user = lookup(uuid, true);
+    public AccountIdentity getAccountIdentity(UUID userId) {
+        UserAccount user = lookupUser(userId, true);
         JsonNode role = user.role();
 
         if (role == null
@@ -70,47 +71,56 @@ public class UserServiceClient {
         return new AccountIdentity(user.id(), user.isActivated().asBoolean(), role.intValue());
     }
 
-    private UserAccount lookup(UUID uuid, boolean forEligibility) {
+    private UserAccount lookupUser(UUID userId, boolean forEligibility) {
         UserLookupResponse response;
 
         try {
             response = restClient
                     .get()
-                    .uri(properties.getUser().getUser() + "/{id}", uuid)
+                    .uri(properties.getUser().getUser() + "/{id}", userId)
                     .retrieve()
                     .body(UserLookupResponse.class);
-        } catch (RestClientResponseException ex) {
-            // Preserve the existing error contract without logging upstream bodies or user data.
-            log.atWarn()
-                    .addKeyValue("event", "dependency.user.failed")
-                    .addKeyValue("upstream.status", ex.getStatusCode().value())
-                    .log("User Service request failed");
+        } catch (RestClientResponseException restClientResponseException) {
+            log.warn(
+                    "User Service request failed, RestClientResponseException={}",
+                    restClientResponseException.getMessage()
+            );
 
-            throw new BusinessException(forEligibility
-                    ? accountLookupError(ex) : ErrorCode.INTERNAL_SERVER_ERROR);
-        } catch (RestClientException ex) {
-            log.atWarn()
-                    .addKeyValue("event", "dependency.user.failed")
-                    .addKeyValue(
-                            "upstream.errorType",
-                            ex.getClass().getSimpleName()
-                    ).log("User Service request failed");
+            throw new BusinessException(
+                    forEligibility
+                            ? accountLookupError(restClientResponseException)
+                            : ErrorCode.INTERNAL_SERVER_ERROR
+            );
+        } catch (RestClientException restClientException) {
+            log.warn(
+                    "User Service request failed, RestClientException={}",
+                    restClientException.getMessage()
+            );
 
-            ErrorCode error = ex instanceof ResourceAccessException
+            ErrorCode error = restClientException instanceof ResourceAccessException
                     ? ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE
                     : ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE;
-            throw new BusinessException(forEligibility ? error : ErrorCode.INTERNAL_SERVER_ERROR);
+
+            throw new BusinessException(
+                    forEligibility
+                            ? error
+                            : ErrorCode.INTERNAL_SERVER_ERROR
+            );
         }
+
         if (response == null
                 || response.user() == null
-                || !uuid.equals(response.user().id())
+                || !userId.equals(response.user().id())
         ) {
             log.atWarn()
                     .addKeyValue("event", "dependency.user.invalid_response")
                     .log("User Service returned an invalid user response");
 
-            throw new BusinessException(forEligibility
-                    ? ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE : ErrorCode.INTERNAL_SERVER_ERROR);
+            throw new BusinessException(
+                    forEligibility
+                            ? ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE
+                            : ErrorCode.INTERNAL_SERVER_ERROR
+            );
         }
 
         return response.user();
@@ -134,10 +144,16 @@ public class UserServiceClient {
         return ErrorCode.DOCTOR_ACCOUNT_UNAVAILABLE;
     }
 
-    public record AccountIdentity(UUID id, boolean isActivated, int role) {
+    public record AccountIdentity(
+            UUID id,
+            boolean isActivated,
+            int role
+    ) {
     }
 
-    private record UserLookupResponse(UserAccount user) {
+    private record UserLookupResponse(
+            UserAccount user
+    ) {
     }
 
     private record UserAccount(
