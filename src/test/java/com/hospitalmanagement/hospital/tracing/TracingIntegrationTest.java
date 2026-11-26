@@ -3,8 +3,8 @@ package com.hospitalmanagement.hospital.tracing;
 import com.hospitalmanagement.hospital.client.UserServiceClient;
 import com.hospitalmanagement.hospital.config.ServiceClientConfig;
 import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
-import com.hospitalmanagement.hospital.dto.InternalUserDTO;
-import com.hospitalmanagement.hospital.dto.response.InternalUserResponse;
+import com.hospitalmanagement.hospital.dto.UserIntegrationDTO;
+import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
 import com.hospitalmanagement.hospital.logging.RequestLoggingConfiguration;
 import com.hospitalmanagement.hospital.logging.filter.RequestLoggingFilter;
 import com.hospitalmanagement.hospital.security.jwks.CallerMetadataInterceptor;
@@ -300,11 +300,11 @@ class TracingIntegrationTest {
         }
 
         @GetMapping("/internal/users/{id}")
-        InternalUserResponse user(
+        UserIntegrationResponse user(
                 @PathVariable
                 UUID id
         ) {
-            return new InternalUserResponse(new InternalUserDTO(
+            return new UserIntegrationResponse(new UserIntegrationDTO(
                     id,
                     probe(),
                     "fixture@example.invalid",

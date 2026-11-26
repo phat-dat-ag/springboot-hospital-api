@@ -4,10 +4,10 @@ import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.common.exception.UnreadableRequestDetails;
 import com.hospitalmanagement.hospital.security.config.UserSecurityConfig;
-import com.hospitalmanagement.hospital.dto.InternalUserDTO;
-import com.hospitalmanagement.hospital.dto.response.InternalUserResponse;
+import com.hospitalmanagement.hospital.dto.UserIntegrationDTO;
+import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
 import com.hospitalmanagement.hospital.security.jwt.user.JwtRoleConverter;
-import com.hospitalmanagement.hospital.service.impl.InternalUserService;
+import com.hospitalmanagement.hospital.service.impl.UserIntegrationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -36,7 +36,7 @@ class InternalUserControllerTest {
     MockMvc mvc;
 
     @MockitoBean
-    InternalUserService users;
+    UserIntegrationServiceImpl users;
 
     @MockitoBean
     JwtDecoder decoder;
@@ -51,7 +51,7 @@ class InternalUserControllerTest {
 
     @Test
     void returnsUnwrappedUserForAuthenticatedCaller() throws Exception {
-        given(users.getUser(ID)).willReturn(new InternalUserResponse(new InternalUserDTO(
+        given(users.getUser(ID)).willReturn(new UserIntegrationResponse(new UserIntegrationDTO(
                 ID, "test-user", "test@example.invalid", true, LocalDateTime.of(2026, 11, 1, 10, 0), null)));
         mvc.perform(get(PATH).with(jwt().authorities(createAuthorityList("ROLE_USER"))))
                 .andExpect(status().isOk())

@@ -3,8 +3,8 @@ package com.hospitalmanagement.hospital.client;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
-import com.hospitalmanagement.hospital.dto.InternalUserDTO;
-import com.hospitalmanagement.hospital.dto.response.InternalUserResponse;
+import com.hospitalmanagement.hospital.dto.UserIntegrationDTO;
+import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,10 +35,10 @@ public class UserServiceClient {
         this.properties = properties;
     }
 
-    public InternalUserResponse getUser(UUID uuid) {
+    public UserIntegrationResponse getUser(UUID uuid) {
         UserAccount user = lookup(uuid, false);
 
-        return new InternalUserResponse(new InternalUserDTO(
+        return new UserIntegrationResponse(new UserIntegrationDTO(
                 user.id(),
                 user.username(),
                 user.email(),

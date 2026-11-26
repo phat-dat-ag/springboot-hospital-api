@@ -3,7 +3,7 @@ package com.hospitalmanagement.hospital.dto;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-public record InternalUserDTO(
+public record UserIntegrationDTO(
         UUID id,
         String username,
         String email,

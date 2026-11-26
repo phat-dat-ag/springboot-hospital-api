@@ -26,11 +26,11 @@ public class JwksIntegrationController extends BaseController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<@NonNull APIResponse<PublicKeysResponse>> getPublicKeys() {
-        log.debug("Public key lookup requested");
+        log.info("Public key lookup requested");
 
         PublicKeysResponse publicKeys = jwksIntegrationService.getPublicKeys();
 
-        log.atDebug()
+        log.atInfo()
                 .addKeyValue("key_count", publicKeys.keys().size())
                 .log("Public key lookup completed");
 
