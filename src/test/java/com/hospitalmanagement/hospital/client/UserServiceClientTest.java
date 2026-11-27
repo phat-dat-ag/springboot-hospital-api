@@ -146,7 +146,7 @@ class UserServiceClientTest {
                 {"user":{"id":"%s","username":"test-user","isActivated":false,"role":4}}
                 """.formatted(ID);
 
-        assertThat(client.getAccountIdentity(ID))
+        assertThat(client.getAccountWithValidRole(ID))
                 .isEqualTo(new UserServiceClient.AccountIdentity(ID, false, 4));
 
         var technical = new JsonMapper().valueToTree(client.getUser(ID));
@@ -164,9 +164,9 @@ class UserServiceClientTest {
                 """.formatted(ID, field);
 
         assertThat(client.getUser(ID).user().id()).isEqualTo(ID);
-        assertThatThrownBy(() -> client.getAccountIdentity(ID))
+        assertThatThrownBy(() -> client.getAccountWithValidRole(ID))
                 .isInstanceOfSatisfying(BusinessException.class, failure ->
-                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE));
+                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.USER_INVALID_ROLE));
     }
 
     @Test
@@ -174,9 +174,9 @@ class UserServiceClientTest {
         body = "{\"user\":{\"id\":\"" + ID + "\",\"role\":4}}";
 
         assertThat(client.getUser(ID).user().isActivated()).isFalse();
-        assertThatThrownBy(() -> client.getAccountIdentity(ID))
+        assertThatThrownBy(() -> client.getAccountWithValidRole(ID))
                 .isInstanceOfSatisfying(BusinessException.class, failure ->
-                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.DOCTOR_ACCOUNT_INVALID_RESPONSE));
+                        assertThat(failure.getErrorCode()).isEqualTo(ErrorCode.USER_INVALID_ROLE));
     }
 
     @Test
@@ -214,7 +214,7 @@ class UserServiceClientTest {
     }
 
     private void assertEligibilityFailure(ErrorCode code) {
-        assertThatThrownBy(() -> client.getAccountIdentity(ID))
+        assertThatThrownBy(() -> client.getAccountWithValidRole(ID))
                 .isInstanceOfSatisfying(BusinessException.class, failure ->
                         assertThat(failure.getErrorCode()).isEqualTo(code));
     }

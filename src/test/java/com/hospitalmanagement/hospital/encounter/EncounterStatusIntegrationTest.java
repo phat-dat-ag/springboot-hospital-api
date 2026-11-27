@@ -1444,7 +1444,7 @@ class EncounterStatusIntegrationTest {
                     id, external_user_id, license_authority, license_number, given_name
                 ) VALUES (?, ?, 'TEST_ONLY', ?, 'Synthetic doctor')
                 """, doctor, actor, doctor.toString());
-        given(accounts.getAccountIdentity(actor))
+        given(accounts.getAccountWithValidRole(actor))
                 .willReturn(new UserServiceClient.AccountIdentity(actor, true, 4));
 
         Instant started = List.of("in_progress", "completed").contains(status) ? NOW : null;

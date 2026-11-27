@@ -1,10 +1,11 @@
 package com.hospitalmanagement.hospital.tracing;
 
 import com.hospitalmanagement.hospital.client.UserServiceClient;
+import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.config.ServiceClientConfig;
 import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
-import com.hospitalmanagement.hospital.dto.InternalUserDTO;
-import com.hospitalmanagement.hospital.dto.response.InternalUserResponse;
+import com.hospitalmanagement.hospital.dto.UserIntegrationDTO;
+import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
 import com.hospitalmanagement.hospital.logging.RequestLoggingConfiguration;
 import com.hospitalmanagement.hospital.logging.filter.RequestLoggingFilter;
 import com.hospitalmanagement.hospital.security.jwks.CallerMetadataInterceptor;
@@ -255,7 +256,9 @@ class TracingIntegrationTest {
 
         @Bean
         SecurityFilterChain security(HttpSecurity http) throws Exception {
-            return http.authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
+            return http.authorizeHttpRequests(
+                            requests -> requests.anyRequest().permitAll()
+                    )
                     .build();
         }
 
@@ -300,13 +303,14 @@ class TracingIntegrationTest {
         }
 
         @GetMapping("/internal/users/{id}")
-        InternalUserResponse user(
+        UserIntegrationResponse user(
                 @PathVariable
                 UUID id
         ) {
-            return new InternalUserResponse(new InternalUserDTO(
+            return new UserIntegrationResponse(new UserIntegrationDTO(
                     id,
                     probe(),
+                    UserRoles.USER.getValue(),
                     "fixture@example.invalid",
                     true,
                     LocalDateTime.of(2026, 1, 1, 0, 0),

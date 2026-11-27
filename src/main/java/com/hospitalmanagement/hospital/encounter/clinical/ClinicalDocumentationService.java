@@ -377,7 +377,7 @@ public class ClinicalDocumentationService {
                 .orElseThrow(ClinicalDocumentationService::notFound);
 
         if (write) {
-            eligibility.requireEligibleProfile(doctor, LocalDate.now(clinicClock));
+            eligibility.requiresEligibleDoctorProfile(doctor, LocalDate.now(clinicClock));
             if (encounter.getStatus() != EncounterStatus.IN_PROGRESS) {
                 throw new BusinessException(ErrorCode.CLINICAL_ENCOUNTER_NOT_IN_PROGRESS);
             }

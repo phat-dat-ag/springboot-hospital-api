@@ -228,7 +228,7 @@ public class EncounterStatusServiceImpl implements EncounterStatusService {
         }
 
         LocalDate clinicDate = instant.atZone(clinicClock.getZone()).toLocalDate();
-        eligibility.requireEligibleProfile(doctor, clinicDate);
+        eligibility.requiresEligibleDoctorProfile(doctor, clinicDate);
     }
 
     private void authorizeTarget(EncounterStatus target, JwtAuthenticationToken authentication) {

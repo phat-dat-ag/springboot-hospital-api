@@ -1,13 +1,14 @@
 package com.hospitalmanagement.hospital.controller;
 
+import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.common.exception.UnreadableRequestDetails;
 import com.hospitalmanagement.hospital.security.config.UserSecurityConfig;
-import com.hospitalmanagement.hospital.dto.InternalUserDTO;
-import com.hospitalmanagement.hospital.dto.response.InternalUserResponse;
+import com.hospitalmanagement.hospital.dto.UserIntegrationDTO;
+import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
 import com.hospitalmanagement.hospital.security.jwt.user.JwtRoleConverter;
-import com.hospitalmanagement.hospital.service.impl.InternalUserService;
+import com.hospitalmanagement.hospital.service.impl.UserIntegrationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -24,7 +25,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.core.authority.AuthorityUtils.createAuthorityList;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(InternalUserController.class)
 @Import({UserSecurityConfig.class, JwtRoleConverter.class, UnreadableRequestDetails.class})
@@ -36,7 +38,7 @@ class InternalUserControllerTest {
     MockMvc mvc;
 
     @MockitoBean
-    InternalUserService users;
+    UserIntegrationServiceImpl users;
 
     @MockitoBean
     JwtDecoder decoder;
@@ -46,13 +48,22 @@ class InternalUserControllerTest {
         mvc.perform(get(PATH)).andExpect(status().isUnauthorized());
         mvc.perform(get(PATH).with(jwt().authorities(createAuthorityList("ROLE_OTHER"))))
                 .andExpect(status().isForbidden());
+
         verifyNoInteractions(users);
     }
 
     @Test
     void returnsUnwrappedUserForAuthenticatedCaller() throws Exception {
-        given(users.getUser(ID)).willReturn(new InternalUserResponse(new InternalUserDTO(
-                ID, "test-user", "test@example.invalid", true, LocalDateTime.of(2026, 11, 1, 10, 0), null)));
+        given(users.getUser(ID)).willReturn(new UserIntegrationResponse(new UserIntegrationDTO(
+                ID,
+                "test-user",
+                UserRoles.USER.getValue(),
+                "test@example.invalid",
+                true,
+                LocalDateTime.of(2026, 11, 1, 10, 0),
+                null
+        )));
+
         mvc.perform(get(PATH).with(jwt().authorities(createAuthorityList("ROLE_USER"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.user.id").value(ID.toString()))
@@ -62,6 +73,7 @@ class InternalUserControllerTest {
     @Test
     void upstreamFailuresRetainGeneric500Envelope() throws Exception {
         given(users.getUser(ID)).willThrow(new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR));
+
         mvc.perform(get(PATH).with(jwt().authorities(createAuthorityList("ROLE_ADMIN"))))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
