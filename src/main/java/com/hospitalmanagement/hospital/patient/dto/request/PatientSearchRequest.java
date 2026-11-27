@@ -11,11 +11,19 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 public record PatientSearchRequest(
-        @Size(min = 1, max = 40, message = "Medical record number must contain 1 to 40 characters")
+        @Size(
+                min = 1,
+                max = 40,
+                message = "Medical record number must contain 1 to 40 characters"
+        )
         @Schema(description = "Exact, case-sensitive medical record number")
         String medicalRecordNumber,
 
-        @Size(min = 2, max = 100, message = "Name must contain 2 to 100 characters")
+        @Size(
+                min = 2,
+                max = 100,
+                message = "Name must contain 2 to 100 characters"
+        )
         @Schema(description = "Case-insensitive literal substring of given or family name")
         String name,
 
@@ -45,7 +53,9 @@ public record PatientSearchRequest(
         String sort
 ) {
     public PatientSearchRequest {
-        medicalRecordNumber = medicalRecordNumber == null ? null : medicalRecordNumber.trim();
+        medicalRecordNumber = medicalRecordNumber == null
+                ? null
+                : medicalRecordNumber.trim();
         name = name == null ? null : name.strip();
         page = page == null ? 0 : page;
         size = size == null ? 20 : size;
