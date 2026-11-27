@@ -27,7 +27,7 @@ import java.util.UUID;
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @RequiredArgsConstructor
 public class PatientDemographicsController extends BaseController {
-    private final PatientDemographicsService demographics;
+    private final PatientDemographicsService patientDemographicsService;
 
     @GetMapping("/{id}")
     @Operation(
@@ -49,7 +49,7 @@ public class PatientDemographicsController extends BaseController {
 
             JwtAuthenticationToken authentication
     ) {
-        PatientDemographicsResponse response = demographics.getDemographics(
+        PatientDemographicsResponse response = patientDemographicsService.getDemographics(
                 id,
                 authentication.getToken().getSubject()
         );

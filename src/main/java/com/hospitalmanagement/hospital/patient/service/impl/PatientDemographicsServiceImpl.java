@@ -2,8 +2,10 @@ package com.hospitalmanagement.hospital.patient.service.impl;
 
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
+import com.hospitalmanagement.hospital.common.utils.UUIDUtils;
 import com.hospitalmanagement.hospital.patient.dto.response.PatientDemographicsResponse;
 import com.hospitalmanagement.hospital.patient.entity.MedicalRecordAccessLog;
+import com.hospitalmanagement.hospital.patient.entity.Patient;
 import com.hospitalmanagement.hospital.patient.enums.AuditActorType;
 import com.hospitalmanagement.hospital.patient.enums.RecordAccessOperation;
 import com.hospitalmanagement.hospital.patient.enums.RecordAccessOutcome;
@@ -28,8 +30,8 @@ public class PatientDemographicsServiceImpl implements PatientDemographicsServic
     private static final String PATIENT_ENTITY = "patients";
     private static final String VIEW_PURPOSE = "patient_identity_verification";
 
-    private final PatientRepository patients;
-    private final MedicalRecordAccessLogRepository accessLogs;
+    private final PatientRepository patientRepository;
+    private final MedicalRecordAccessLogRepository medicalRecordAccessLogRepository;
 
     @Override
     @Transactional
@@ -38,15 +40,42 @@ public class PatientDemographicsServiceImpl implements PatientDemographicsServic
                 .addKeyValue("event", "patient.demographics.started")
                 .log("Patient demographics lookup started");
 
-        UUID actorId = parseActor(subject);
+        UUID userId = UUIDUtils.parseUserId(subject);
 
-        PatientDemographicsResponse response = patients
+        PatientDemographicsResponse response = findPatientDemographicsResponse(patientId);
+
+        Patient patient = patientRepository.getReferenceById(patientId);
+
+        MedicalRecordAccessLog saveMedicalRecordAccessLog =
+                buildMedicalRecordAccessLogRepository(patient, userId, patientId);
+
+        saveMedicalRecordAccessLog(saveMedicalRecordAccessLog);
+
+        logAfterCommit();
+
+        return response;
+    }
+
+    private PatientDemographicsResponse findPatientDemographicsResponse(UUID patientId) {
+        return patientRepository
                 .findDemographicsByIdAndDeletedAtIsNull(patientId)
-                .orElseThrow(this::unavailable);
+                .orElseThrow(() -> {
+                    log.atInfo()
+                            .addKeyValue("event", "patient.demographics.unavailable")
+                            .log("Patient demographics unavailable");
 
-        MedicalRecordAccessLog event = MedicalRecordAccessLog.builder()
-                .patient(patients.getReferenceById(patientId))
-                .actorUserId(actorId)
+                    return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+                });
+    }
+
+    private MedicalRecordAccessLog buildMedicalRecordAccessLogRepository(
+            Patient patient,
+            UUID userId,
+            UUID patientId
+    ) {
+        return MedicalRecordAccessLog.builder()
+                .patient(patient)
+                .actorUserId(userId)
                 .actorType(AuditActorType.USER)
                 .operation(RecordAccessOperation.VIEW)
                 .entityType(PATIENT_ENTITY)
@@ -55,9 +84,13 @@ public class PatientDemographicsServiceImpl implements PatientDemographicsServic
                 .outcome(RecordAccessOutcome.ALLOWED)
                 .correlationId(UUID.randomUUID())
                 .build();
+    }
 
+    private void saveMedicalRecordAccessLog(
+            MedicalRecordAccessLog medicalRecordAccessLog
+    ) {
         try {
-            accessLogs.saveAndFlush(event);
+            medicalRecordAccessLogRepository.saveAndFlush(medicalRecordAccessLog);
         } catch (DataAccessException exception) {
             log.atError()
                     .addKeyValue("event", "patient.demographics.access_log.failed")
@@ -66,7 +99,9 @@ public class PatientDemographicsServiceImpl implements PatientDemographicsServic
 
             throw new BusinessException(ErrorCode.PATIENT_ACCESS_LOG_FAILED);
         }
+    }
 
+    private void logAfterCommit() {
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
@@ -77,29 +112,5 @@ public class PatientDemographicsServiceImpl implements PatientDemographicsServic
                     }
                 }
         );
-
-        return response;
-    }
-
-    private UUID parseActor(String subject) {
-        try {
-            UUID actor = UUID.fromString(subject);
-
-            if (actor.toString().equalsIgnoreCase(subject)) {
-                return actor;
-            }
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            throw new BusinessException(ErrorCode.INVALID_ACTOR_ID);
-        }
-
-        throw new BusinessException(ErrorCode.INVALID_ACTOR_ID);
-    }
-
-    private BusinessException unavailable() {
-        log.atInfo()
-                .addKeyValue("event", "patient.demographics.unavailable")
-                .log("Patient demographics unavailable");
-
-        return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
     }
 }

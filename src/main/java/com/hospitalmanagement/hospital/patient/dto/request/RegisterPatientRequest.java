@@ -11,8 +11,6 @@ import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 @Schema(
@@ -32,14 +30,23 @@ import java.util.List;
 )
 public record RegisterPatientRequest(
         @NotBlank(message = "Medical record number is required")
-        @Size(max = 40, message = "Medical record number must not exceed 40 characters")
+        @Size(
+                max = 40,
+                message = "Medical record number must not exceed 40 characters"
+        )
         String medicalRecordNumber,
 
         @NotBlank(message = "Given name is required")
-        @Size(max = 100, message = "Given name must not exceed 100 characters")
+        @Size(
+                max = 100,
+                message = "Given name must not exceed 100 characters"
+        )
         String givenName,
 
-        @Size(max = 100, message = "Family name must not exceed 100 characters")
+        @Size(
+                max = 100,
+                message = "Family name must not exceed 100 characters"
+        )
         String familyName,
 
         @PastOrPresent(message = "Date of birth must not be in the future")
@@ -58,6 +65,6 @@ public record RegisterPatientRequest(
         // Preserve null entries so Bean Validation can report their field paths.
         contacts = contacts == null
                 ? List.of()
-                : Collections.unmodifiableList(new ArrayList<>(contacts));
+                : List.copyOf(contacts);
     }
 }
