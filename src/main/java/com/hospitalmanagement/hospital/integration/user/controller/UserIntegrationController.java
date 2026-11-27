@@ -1,8 +1,8 @@
-package com.hospitalmanagement.hospital.controller;
+package com.hospitalmanagement.hospital.integration.user.controller;
 
 import com.hospitalmanagement.hospital.config.OpenApiConfig;
-import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
-import com.hospitalmanagement.hospital.service.UserIntegrationService;
+import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationResponse;
+import com.hospitalmanagement.hospital.integration.user.service.UserIntegrationService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +18,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
 @Slf4j
-public class InternalUserController {
+public class UserIntegrationController {
 
     private final UserIntegrationService userIntegrationService;
 

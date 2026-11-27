@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.client;
 
+import com.hospitalmanagement.hospital.integration.jwks.client.JwksServiceClient;
 import com.hospitalmanagement.hospital.security.jwks.CallerMetadataInterceptor;
 import com.hospitalmanagement.hospital.config.ServiceClientConfig;
 import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;

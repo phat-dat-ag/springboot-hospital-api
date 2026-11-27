@@ -1,8 +1,8 @@
-package com.hospitalmanagement.hospital.service.impl;
+package com.hospitalmanagement.hospital.integration.user.service.impl;
 
-import com.hospitalmanagement.hospital.client.UserServiceClient;
-import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
-import com.hospitalmanagement.hospital.service.UserIntegrationService;
+import com.hospitalmanagement.hospital.integration.user.client.UserServiceClient;
+import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationResponse;
+import com.hospitalmanagement.hospital.integration.user.service.UserIntegrationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

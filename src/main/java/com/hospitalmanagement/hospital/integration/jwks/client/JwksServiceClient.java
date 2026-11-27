@@ -1,7 +1,7 @@
-package com.hospitalmanagement.hospital.client;
+package com.hospitalmanagement.hospital.integration.jwks.client;
 
 import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
-import com.hospitalmanagement.hospital.dto.response.PublicKeysResponse;
+import com.hospitalmanagement.hospital.integration.jwks.dto.PublicKeysResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;

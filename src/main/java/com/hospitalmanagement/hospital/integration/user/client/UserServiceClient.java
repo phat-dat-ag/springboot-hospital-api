@@ -1,11 +1,11 @@
-package com.hospitalmanagement.hospital.client;
+package com.hospitalmanagement.hospital.integration.user.client;
 
 import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
-import com.hospitalmanagement.hospital.dto.UserIntegrationDTO;
-import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
+import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationDTO;
+import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationResponse;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;

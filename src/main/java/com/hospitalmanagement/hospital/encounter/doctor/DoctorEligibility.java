@@ -1,6 +1,6 @@
 package com.hospitalmanagement.hospital.encounter.doctor;
 
-import com.hospitalmanagement.hospital.client.UserServiceClient;
+import com.hospitalmanagement.hospital.integration.user.client.UserServiceClient;
 import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;

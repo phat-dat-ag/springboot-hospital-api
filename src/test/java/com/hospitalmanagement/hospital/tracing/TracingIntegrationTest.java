@@ -1,11 +1,11 @@
 package com.hospitalmanagement.hospital.tracing;
 
-import com.hospitalmanagement.hospital.client.UserServiceClient;
+import com.hospitalmanagement.hospital.integration.user.client.UserServiceClient;
 import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.config.ServiceClientConfig;
 import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
-import com.hospitalmanagement.hospital.dto.UserIntegrationDTO;
-import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
+import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationDTO;
+import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationResponse;
 import com.hospitalmanagement.hospital.logging.RequestLoggingConfiguration;
 import com.hospitalmanagement.hospital.logging.filter.RequestLoggingFilter;
 import com.hospitalmanagement.hospital.security.jwks.CallerMetadataInterceptor;

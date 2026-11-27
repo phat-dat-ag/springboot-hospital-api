@@ -1,6 +1,6 @@
 package com.hospitalmanagement.hospital.encounter;
 
-import com.hospitalmanagement.hospital.client.UserServiceClient;
+import com.hospitalmanagement.hospital.integration.user.client.UserServiceClient;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.encounter.dto.request.ChangeEncounterStatusRequest;

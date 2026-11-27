@@ -4,11 +4,12 @@ import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
 import com.hospitalmanagement.hospital.common.exception.UnreadableRequestDetails;
+import com.hospitalmanagement.hospital.integration.user.controller.UserIntegrationController;
 import com.hospitalmanagement.hospital.security.config.UserSecurityConfig;
-import com.hospitalmanagement.hospital.dto.UserIntegrationDTO;
-import com.hospitalmanagement.hospital.dto.response.UserIntegrationResponse;
+import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationDTO;
+import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationResponse;
 import com.hospitalmanagement.hospital.security.jwt.user.JwtRoleConverter;
-import com.hospitalmanagement.hospital.service.impl.UserIntegrationServiceImpl;
+import com.hospitalmanagement.hospital.integration.user.service.impl.UserIntegrationServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -28,9 +29,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(InternalUserController.class)
+@WebMvcTest(UserIntegrationController.class)
 @Import({UserSecurityConfig.class, JwtRoleConverter.class, UnreadableRequestDetails.class})
-class InternalUserControllerTest {
+class UserIntegrationControllerTest {
     private static final UUID ID = UUID.fromString("f05bf709-5cb8-4a4c-9ac4-e537b5579aef");
     private static final String PATH = "/api/v1/hospital/technical/users/" + ID;
 

@@ -1,10 +1,10 @@
-package com.hospitalmanagement.hospital.controller;
+package com.hospitalmanagement.hospital.integration.jwks.controller;
 
 import com.hospitalmanagement.hospital.common.controller.BaseController;
 import com.hospitalmanagement.hospital.common.response.APIResponse;
 import com.hospitalmanagement.hospital.config.OpenApiConfig;
-import com.hospitalmanagement.hospital.dto.response.PublicKeysResponse;
-import com.hospitalmanagement.hospital.service.JwksIntegrationService;
+import com.hospitalmanagement.hospital.integration.jwks.dto.PublicKeysResponse;
+import com.hospitalmanagement.hospital.integration.jwks.service.JwksIntegrationService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;

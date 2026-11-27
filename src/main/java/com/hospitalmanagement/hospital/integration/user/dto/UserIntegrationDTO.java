@@ -1,4 +1,4 @@
-package com.hospitalmanagement.hospital.dto;
+package com.hospitalmanagement.hospital.integration.user.dto;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

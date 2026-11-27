@@ -1,8 +1,8 @@
-package com.hospitalmanagement.hospital.service.impl;
+package com.hospitalmanagement.hospital.integration.jwks.service.impl;
 
-import com.hospitalmanagement.hospital.client.JwksServiceClient;
-import com.hospitalmanagement.hospital.dto.response.PublicKeysResponse;
-import com.hospitalmanagement.hospital.service.JwksIntegrationService;
+import com.hospitalmanagement.hospital.integration.jwks.client.JwksServiceClient;
+import com.hospitalmanagement.hospital.integration.jwks.dto.PublicKeysResponse;
+import com.hospitalmanagement.hospital.integration.jwks.service.JwksIntegrationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

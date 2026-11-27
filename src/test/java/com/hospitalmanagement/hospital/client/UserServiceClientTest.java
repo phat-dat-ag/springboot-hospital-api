@@ -1,5 +1,6 @@
 package com.hospitalmanagement.hospital.client;
 
+import com.hospitalmanagement.hospital.integration.user.client.UserServiceClient;
 import com.hospitalmanagement.hospital.security.jwks.CallerMetadataInterceptor;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;

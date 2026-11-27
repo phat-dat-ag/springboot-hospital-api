@@ -1,4 +1,4 @@
-package com.hospitalmanagement.hospital.dto.response;
+package com.hospitalmanagement.hospital.integration.jwks.dto;
 
 public record PublicKeyDTO(
         String kty,
