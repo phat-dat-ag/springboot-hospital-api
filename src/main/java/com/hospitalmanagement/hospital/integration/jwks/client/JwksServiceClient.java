@@ -1,6 +1,6 @@
 package com.hospitalmanagement.hospital.integration.jwks.client;
 
-import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
+import com.hospitalmanagement.hospital.integration.config.ServiceEndpointProperties;
 import com.hospitalmanagement.hospital.integration.jwks.dto.PublicKeysResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;

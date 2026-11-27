@@ -1,4 +1,4 @@
-package com.hospitalmanagement.hospital.config;
+package com.hospitalmanagement.hospital.integration.config;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;

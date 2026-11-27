@@ -1,6 +1,6 @@
 package com.hospitalmanagement.hospital;
 
-import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
+import com.hospitalmanagement.hospital.integration.config.ServiceEndpointProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

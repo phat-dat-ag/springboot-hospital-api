@@ -2,8 +2,8 @@ package com.hospitalmanagement.hospital.client;
 
 import com.hospitalmanagement.hospital.integration.jwks.client.JwksServiceClient;
 import com.hospitalmanagement.hospital.security.jwks.CallerMetadataInterceptor;
-import com.hospitalmanagement.hospital.config.ServiceClientConfig;
-import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
+import com.hospitalmanagement.hospital.integration.config.ServiceClientConfig;
+import com.hospitalmanagement.hospital.integration.config.ServiceEndpointProperties;
 import com.hospitalmanagement.hospital.security.jwt.internal.InternalJwtTokenService;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;

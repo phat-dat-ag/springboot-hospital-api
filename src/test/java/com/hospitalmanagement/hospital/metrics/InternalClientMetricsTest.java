@@ -1,7 +1,7 @@
 package com.hospitalmanagement.hospital.metrics;
 
-import com.hospitalmanagement.hospital.config.ServiceClientConfig;
-import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
+import com.hospitalmanagement.hospital.integration.config.ServiceClientConfig;
+import com.hospitalmanagement.hospital.integration.config.ServiceEndpointProperties;
 import com.hospitalmanagement.hospital.integration.user.client.UserServiceClient;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.security.jwks.CallerMetadataInterceptor;

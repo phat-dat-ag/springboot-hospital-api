@@ -3,7 +3,7 @@ package com.hospitalmanagement.hospital.integration.user.client;
 import com.hospitalmanagement.hospital.common.enums.UserRoles;
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
-import com.hospitalmanagement.hospital.config.ServiceEndpointProperties;
+import com.hospitalmanagement.hospital.integration.config.ServiceEndpointProperties;
 import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationDTO;
 import com.hospitalmanagement.hospital.integration.user.dto.UserIntegrationResponse;
 
