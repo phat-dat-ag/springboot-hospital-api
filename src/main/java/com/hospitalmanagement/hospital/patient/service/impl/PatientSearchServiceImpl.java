@@ -2,6 +2,7 @@ package com.hospitalmanagement.hospital.patient.service.impl;
 
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
+import com.hospitalmanagement.hospital.common.utils.UUIDUtils;
 import com.hospitalmanagement.hospital.patient.dto.request.PatientSearchRequest;
 import com.hospitalmanagement.hospital.patient.dto.response.PatientSearchResponse;
 import com.hospitalmanagement.hospital.patient.dto.response.PatientSummaryResponse;
@@ -38,7 +39,7 @@ import java.util.UUID;
 @Slf4j
 public class PatientSearchServiceImpl implements PatientSearchService {
     private final PatientRepository patientRepository;
-    private final MedicalRecordAccessLogRepository accessLogRepository;
+    private final MedicalRecordAccessLogRepository medicalRecordAccessLogRepository;
 
     @Override
     @Transactional
@@ -51,7 +52,7 @@ public class PatientSearchServiceImpl implements PatientSearchService {
                 .addKeyValue("stage", "validation")
                 .log("Patient search started");
 
-        UUID actorUserId = parseActorUserId(authenticatedSubject);
+        UUID actorUserId = UUIDUtils.parseUserId(authenticatedSubject);
 
         validateSearchRequest(request);
 
@@ -91,14 +92,6 @@ public class PatientSearchServiceImpl implements PatientSearchService {
                 .log("Patient search rejected");
 
         return new BusinessException(errorCode);
-    }
-
-    private UUID parseActorUserId(String authenticatedSubject) {
-        try {
-            return UUID.fromString(authenticatedSubject);
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            throw rejectedRequest(ErrorCode.INVALID_ACTOR_ID);
-        }
     }
 
     private void validateSearchRequest(
@@ -208,7 +201,7 @@ public class PatientSearchServiceImpl implements PatientSearchService {
 
             // Flush before returning; an audit failure must roll back the whole search.
             try {
-                accessLogRepository.saveAllAndFlush(accessLogs);
+                medicalRecordAccessLogRepository.saveAllAndFlush(accessLogs);
 
                 log.atInfo()
                         .addKeyValue("event", "patient.search.access_logs.flushed")

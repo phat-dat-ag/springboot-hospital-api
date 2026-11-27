@@ -2,6 +2,7 @@ package com.hospitalmanagement.hospital.patient.service.impl;
 
 import com.hospitalmanagement.hospital.common.exception.BusinessException;
 import com.hospitalmanagement.hospital.common.exception.ErrorCode;
+import com.hospitalmanagement.hospital.common.utils.UUIDUtils;
 import com.hospitalmanagement.hospital.patient.dto.request.ContactRequest;
 import com.hospitalmanagement.hospital.patient.dto.request.RegisterPatientRequest;
 import com.hospitalmanagement.hospital.patient.dto.response.PatientRegistrationResponse;
@@ -49,66 +50,17 @@ public class PatientServiceImpl implements PatientService {
             RegisterPatientRequest request,
             String authenticatedSubject
     ) {
-        UUID actorUserId;
-
-        try {
-            actorUserId = UUID.fromString(authenticatedSubject);
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            log.atWarn()
-                    .addKeyValue("event", "patient.registration.rejected")
-                    .addKeyValue("errorCode", ErrorCode.INVALID_ACTOR_ID.name())
-                    .log("Patient registration rejected");
-
-            throw new BusinessException(ErrorCode.INVALID_ACTOR_ID);
-        }
+        UUID userId = UUIDUtils.parseUserId(authenticatedSubject);
 
         validateContacts(request.contacts());
 
-        Patient patient = new Patient();
+        Patient patient = buildPatientEntity(request);
 
-        patient.setMedicalRecordNumber(request.medicalRecordNumber());
-        patient.setGivenName(request.givenName());
-        patient.setFamilyName(request.familyName());
-        patient.setDateOfBirth(request.dateOfBirth());
-        patient.setSexAtBirth(request.sexAtBirth());
+        saveAndPlushPatient(patient);
 
-        try {
-            patientRepository.saveAndFlush(patient);
-        } catch (DataIntegrityViolationException exception) {
-            if (isDuplicateMedicalRecordNumber(exception)) {
-                log.atWarn()
-                        .addKeyValue("event", "patient.registration.rejected")
-                        .addKeyValue("errorCode", ErrorCode.PATIENT_ALREADY_EXISTS.name())
-                        .log("Patient registration rejected");
+        List<UUID> contactIds = saveContacts(patient, request.contacts());
 
-                // Exit immediately: the failed transaction must roll back.
-                throw new BusinessException(ErrorCode.PATIENT_ALREADY_EXISTS);
-            }
-
-            throw exception;
-        }
-
-        List<PatientContact> savedContacts = patientContactRepository.saveAll(
-                request.contacts()
-                        .stream()
-                        .map(contact -> toContact(patient, contact))
-                        .toList()
-        );
-
-        ClinicalAuditLog event = ClinicalAuditLog.builder()
-                .patient(patient)
-                .actorUserId(actorUserId)
-                .actorType(AuditActorType.USER)
-                .operation(AuditOperation.CREATE)
-                .entityType("patients")
-                .entityId(patient.getId())
-                .build();
-
-        clinicalAuditLogRepository.saveAndFlush(event);
-
-        List<UUID> contactIds = savedContacts.stream()
-                .map(PatientContact::getId)
-                .toList();
+        saveClinicalAuditLog(patient, userId);
 
         logAfterCommit(contactIds.size());
 
@@ -124,23 +76,6 @@ public class PatientServiceImpl implements PatientService {
         );
     }
 
-    private void logAfterCommit(int contactCount) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                log.atInfo()
-                        .addKeyValue("event", "patient.registration.completed")
-                        .addKeyValue("stage", "committed")
-                        .addKeyValue("contactCount", contactCount)
-                        .log("Patient registration completed");
-            }
-        });
-    }
-
     private void validateContacts(List<ContactRequest> requestedContacts) {
         Set<ContactType> primaryContactTypes = new HashSet<>();
 
@@ -151,9 +86,12 @@ public class PatientServiceImpl implements PatientService {
             ) {
                 log.warn(
                         "Patient contact validation failed: "
-                                + "reason={}, contactType={}",
+                                + "reason={}, contactType={}, phone={}, email={}, addressText={}",
                         ErrorCode.CONTACT_DETAILS_REQUIRED,
-                        contact.contactType()
+                        contact.contactType(),
+                        contact.phone(),
+                        contact.email(),
+                        contact.addressText()
                 );
 
                 throw new BusinessException(
@@ -166,9 +104,10 @@ public class PatientServiceImpl implements PatientService {
             ) {
                 log.warn(
                         "Patient contact validation failed: "
-                                + "reason={}, contactType={}",
+                                + "reason={}, contactType={}, contactName={}",
                         ErrorCode.CONTACT_NAME_REQUIRED,
-                        contact.contactType()
+                        contact.contactType(),
+                        contact.contactName()
                 );
 
                 throw new BusinessException(
@@ -193,7 +132,70 @@ public class PatientServiceImpl implements PatientService {
         }
     }
 
-    private PatientContact toContact(Patient patient, ContactRequest request) {
+    private Patient buildPatientEntity(
+            RegisterPatientRequest registerPatientRequest
+    ) {
+        Patient patient = new Patient();
+
+        patient.setMedicalRecordNumber(registerPatientRequest.medicalRecordNumber());
+        patient.setGivenName(registerPatientRequest.givenName());
+        patient.setFamilyName(registerPatientRequest.familyName());
+        patient.setDateOfBirth(registerPatientRequest.dateOfBirth());
+        patient.setSexAtBirth(registerPatientRequest.sexAtBirth());
+
+        return patient;
+    }
+
+    private void saveAndPlushPatient(Patient patient) {
+        try {
+            patientRepository.saveAndFlush(patient);
+        } catch (DataIntegrityViolationException exception) {
+            if (isDuplicateMedicalRecordNumber(exception)) {
+                log.atWarn()
+                        .addKeyValue("event", "patient.registration.rejected")
+                        .addKeyValue("errorCode", ErrorCode.PATIENT_ALREADY_EXISTS.name())
+                        .log("Patient registration rejected");
+
+                // Exit immediately: the failed transaction must roll back.
+                throw new BusinessException(ErrorCode.PATIENT_ALREADY_EXISTS);
+            }
+
+            throw exception;
+        }
+    }
+
+    private boolean isDuplicateMedicalRecordNumber(Throwable exception) {
+        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConstraintViolationException violation
+                    && "23505".equals(violation.getSQLState())
+                    && MRN_UNIQUE_CONSTRAINT.equals(violation.getConstraintName())
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private List<UUID> saveContacts(
+            Patient patient,
+            List<ContactRequest> contactRequests
+    ) {
+        List<PatientContact> savedContacts = patientContactRepository.saveAll(
+                contactRequests.stream()
+                        .map(contact -> toContact(patient, contact))
+                        .toList()
+        );
+
+        return savedContacts.stream()
+                .map(PatientContact::getId)
+                .toList();
+    }
+
+    private PatientContact toContact(
+            Patient patient,
+            ContactRequest request
+    ) {
         PatientContact contact = new PatientContact();
 
         contact.setPatient(patient);
@@ -208,16 +210,33 @@ public class PatientServiceImpl implements PatientService {
         return contact;
     }
 
-    private boolean isDuplicateMedicalRecordNumber(Throwable exception) {
-        for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
-            if (cause instanceof ConstraintViolationException violation
-                    && "23505".equals(violation.getSQLState())
-                    && MRN_UNIQUE_CONSTRAINT.equals(violation.getConstraintName())
-            ) {
-                return true;
-            }
+    private void saveClinicalAuditLog(Patient patient, UUID userId) {
+        ClinicalAuditLog event = ClinicalAuditLog.builder()
+                .patient(patient)
+                .actorUserId(userId)
+                .actorType(AuditActorType.USER)
+                .operation(AuditOperation.CREATE)
+                .entityType("patients")
+                .entityId(patient.getId())
+                .build();
+
+        clinicalAuditLogRepository.saveAndFlush(event);
+    }
+
+    private void logAfterCommit(int contactCount) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
         }
 
-        return false;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                log.atInfo()
+                        .addKeyValue("event", "patient.registration.completed")
+                        .addKeyValue("stage", "committed")
+                        .addKeyValue("contactCount", contactCount)
+                        .log("Patient registration completed");
+            }
+        });
     }
 }
